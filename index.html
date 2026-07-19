@@ -254,8 +254,10 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 [주요 과제] 딥테크챌린지(200kg 군수드론 36억), UAM 항전SW(20억, 한화 컨소시엄), 지역SW(AI 소방드론 군집관제), 방산 시제품 3건(책임 백재우, 9~10월 마감 집중), ADD 착륙제어 기술이전 CAV.
 [최근 인사이트] IBK창공 대구 3기 OT — 혁신제품·NET 인증으로 조달 패스트트랙, 교육 시뮬레이터·유지보수 반복매출, 자금(A2G캐피탈·아펙스).
 
-[역할] 진짜 현장 비서처럼. 한국어. 간결하고 능동적으로.
+[역할] 진짜 현장 비서처럼. 한국어. 간결하되 능동적으로, 자주 되물어라.
 - 대표님이 일정/회의내용/강의/아이디어/할일/감정을 말하면: 핵심 요약 → 중요한 점 되물어보기 → 조사할 것이나 캘린더 등록을 먼저 제안. 관련 사람·거래처·과제를 자연스럽게 연결.
+- 조금이라도 애매하면(날짜·이름·장소·같은 일정인지 등) 추측해서 저장하지 말고 먼저 짧게 확인 질문을 던져라. 예: "이번 주 금요일(7/24) 동국대 특강 말씀이시죠? 거기에 넣을까요?"
+- ★★기존 일정에 정보 추가 시 중복 금지: 대표님이 이미 등록된 일정과 관련된 추가 정보(담당자 연락처·장소·준비물·변경사항 등)를 말하면, 절대 새 event를 새로 만들지 마라. 기존 항목이 명확하면 update로 그 일정에 덧붙이고, 애매하면 "○○ 일정에 추가할까요?"라고 먼저 물어라. (예: "동국대 특강" 이미 있는데 "담당교수 연락처 010-..." 라고 하면 → 새 일정 X, 기존 동국대 특강에 update)
 [저장 규칙] 저장할 구체적 내용이 있으면 답변 맨 끝에 딱 한 줄(사용자에겐 안 보임):
 @@ACTIONS@@[{...}]
 - {"type":"event","date":"YYYY-MM-DD","time":"HH:mm","title":"제목","note":"메모"}  (날짜 확정 일정/조사예정. 시간 없으면 time 생략)
@@ -263,6 +265,7 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 - {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심"],"followups":["확인할것"]}
      · internal=직원 간 내부회의 · external=거래처·투자사 등 외부회의 · lecture=강의·컨설팅·교육
 - {"type":"memo","kind":"idea|diary","text":"내용"}  (idea=갑자기 떠오른 아이디어 · diary=창업일기·한풀이·감정)
+- {"type":"update","match":"기존 일정 제목 일부","note":"추가할 내용(연락처·장소·준비물 등)"}  (이미 등록된 일정/할일에 정보 덧붙이기. 새로 만들지 말 것. match는 기존 제목의 핵심 단어)
 회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.
 [저장 톤] @@ACTIONS@@ 는 앱이 처리하는 내부 표기이니 답변 본문에는 절대 노출하지 말 것. 앱이 저장되면 자동으로 '✓' 확인 칩을 대표님께 보여주니, 답변에서 저장한 항목을 장황하게 나열하거나 "노출시켜 죄송하다"는 식으로 사과하지 말 것. 저장 언급은 "일정/할일에 넣어뒀어요" 정도로 짧고 자연스럽게. 같은 내용을 이미 등록했으면 또 등록하지 말 것.`;
 
@@ -449,6 +452,10 @@ function applyActions(actions){
     else if(a.type==='memo'){const k=a.kind==='diary'?'diary':'idea';
       if(S.memos[k].some(x=>norm(x.text)===norm(a.text)))return;
       S.memos[k].unshift({id:id(),date:today(),text:a.text||''});names.push(k==='idea'?'💡 아이디어 저장':'📔 창업일기 저장')}
+    else if(a.type==='update'){const mt=norm(a.match||a.title||'');const add=(a.note||a.add||a.text||'').trim();
+      let ev=mt?S.events.find(e=>norm(e.title).includes(mt)):null;
+      if(!ev&&mt.length>=3)ev=S.events.find(e=>norm(e.title).includes(mt.slice(0,3)));
+      if(ev&&add){if(norm(ev.note||'').includes(norm(add)))return;ev.note=(ev.note?ev.note+' / ':'')+add;names.push('✏️ '+ev.title+'에 추가')}}
   });
   if(names.length){names.forEach(n=>S.chat.push({role:'saved',text:n}));save();renderChat();badges()}
 }
@@ -485,15 +492,32 @@ function dayPanel(){
   return h;
 }
 function evRow(e,td){let tag='';if(td){const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);if(m&&m[1]<today())tag=' <span style="color:#F87171;font-size:11px;font-weight:700;background:rgba(248,113,113,.13);padding:1px 6px;border-radius:6px">지연</span>';}
-  return `<div class="ev"><div class="when">${td?'✓':esc(e.time||'종일')}</div><div style="flex:1"><b>${esc(e.title)}${tag}</b>${e.note?`<span>${esc(e.note)}</span>`:''}</div><span class="del" data-id="${e.id}" title="완료·삭제">✕</span></div>`}
+  return `<div class="ev" data-ev="${e.id}" style="cursor:pointer"><div class="when">${td?'✓':esc(e.time||'종일')}</div><div style="flex:1"><b>${esc(e.title)}${tag}</b>${e.note?`<span>${esc(e.note)}</span>`:''}</div><span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:6px;font-size:14px">✎</span><span class="del" data-id="${e.id}" title="삭제">✕</span></div>`}
 function bindCal(){
   const w=$('#calList');
   w.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const n=b.dataset.nav;if(n==='tw'||n==='tm'){calSel=today();renderCal();return}
     const d=parseD(calSel);if(n==='pw')d.setDate(d.getDate()-7);if(n==='nw')d.setDate(d.getDate()+7);if(n==='pm')d.setMonth(d.getMonth()-1);if(n==='nm')d.setMonth(d.getMonth()+1);calSel=dstr(d);renderCal()});
   w.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>{calSel=x.dataset.d;renderCal()});
-  w.querySelectorAll('.del').forEach(x=>x.onclick=()=>{S.events=S.events.filter(e=>e.id!==x.dataset.id);save();renderCal();badges()});
+  w.querySelectorAll('.del').forEach(x=>x.onclick=ev=>{ev.stopPropagation();S.events=S.events.filter(e=>e.id!==x.dataset.id);save();renderCal();badges()});
+  w.querySelectorAll('[data-edit]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();editEventForm(x.dataset.edit)});
+  w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]'))return;editEventForm(x.dataset.ev)});
   const ad=w.querySelector('[data-add]');if(ad)ad.onclick=()=>addEventForm(calSel);
 }
+window.editEventForm=(eid)=>{const e=S.events.find(x=>x.id===eid);if(!e)return;
+  openAdd(`<h3>일정 수정</h3>
+  <div class="fld"><label>날짜 <span style="color:var(--muted);font-size:11px">(비우면 '할 일'로)</span></label><input type="date" id="exD"></div>
+  <div class="fld"><label>시간 (선택)</label><input type="time" id="exTime"></div>
+  <div class="fld"><label>내용</label><input id="exT"></div>
+  <div class="fld"><label>메모 · 연락처 · 장소</label><textarea id="exN" rows="4" placeholder="예: 담당교수 박정민 010-0000-0000 / 장소 황룡원스테이 / 11-12시" style="width:100%;box-sizing:border-box;background:#0B1220;border:1px solid rgba(56,189,248,.25);border-radius:10px;color:#DCEEFF;padding:10px;font:inherit;resize:vertical"></textarea></div>
+  <button class="btn" onclick="saveEventEdit('${eid}')">저장</button>
+  <button class="btn ghost" onclick="delEvent('${eid}')" style="color:#F87171">🗑 삭제</button>
+  <button class="btn ghost" onclick="closeAdd()">취소</button>`);
+  $('#exD').value=e.date||'';$('#exTime').value=e.time||'';$('#exT').value=e.title||'';$('#exN').value=e.note||'';};
+window.saveEventEdit=(eid)=>{const e=S.events.find(x=>x.id===eid);if(!e)return;
+  const t=$('#exT').value.trim();if(!t){toast('내용을 입력하세요');return}
+  e.title=t;e.date=$('#exD').value||'';e.time=e.date?($('#exTime').value||''):'';e.note=$('#exN').value.trim();e.todo=!e.date;
+  save();closeAdd();if(e.date)calSel=e.date;renderCal();badges();toast('수정했어요')};
+window.delEvent=(eid)=>{S.events=S.events.filter(x=>x.id!==eid);save();closeAdd();renderCal();badges();toast('삭제했어요')};
 function addEventForm(date){openAdd(`<h3>일정 추가</h3>
   <div class="fld"><label>날짜</label><input type="date" id="axD" value="${date||today()}"></div>
   <div class="fld"><label>시간 (선택)</label><input type="time" id="axTime"></div>
