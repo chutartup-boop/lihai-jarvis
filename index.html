@@ -173,12 +173,12 @@
     <div class="composer">
       <div class="attaches" id="attaches"></div>
       <div class="cbar">
-        <button class="clip" id="btnClip" title="사진·녹음 첨부">📎</button>
+        <button class="clip" id="btnClip" title="PDF·사진·녹음 첨부">📎</button>
         <textarea id="input" rows="1" placeholder="비서에게 말하기…  예) 내일 3시 백석호 이사 미팅 잡아줘"></textarea>
         <button class="send" id="btnSend">➤</button>
       </div>
     </div>
-    <input type="file" id="file" accept="image/*,audio/*" multiple style="display:none">
+    <input type="file" id="file" accept="image/*,audio/*,application/pdf,.pdf" multiple style="display:none">
   </section>
 
   <section class="view" id="v-cal"><div class="vwrap">
@@ -263,7 +263,8 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 - {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심"],"followups":["확인할것"]}
      · internal=직원 간 내부회의 · external=거래처·투자사 등 외부회의 · lecture=강의·컨설팅·교육
 - {"type":"memo","kind":"idea|diary","text":"내용"}  (idea=갑자기 떠오른 아이디어 · diary=창업일기·한풀이·감정)
-회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.`;
+회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.
+[저장 톤] @@ACTIONS@@ 는 앱이 처리하는 내부 표기이니 답변 본문에는 절대 노출하지 말 것. 앱이 저장되면 자동으로 '✓' 확인 칩을 대표님께 보여주니, 답변에서 저장한 항목을 장황하게 나열하거나 "노출시켜 죄송하다"는 식으로 사과하지 말 것. 저장 언급은 "일정/할일에 넣어뒀어요" 정도로 짧고 자연스럽게. 같은 내용을 이미 등록했으면 또 등록하지 말 것.`;
 
 /* ---------- state + 클라우드(Supabase) ---------- */
 const DEF={_v:3,chat:[],events:[],meetings:[],recordings:[],memos:{idea:[],diary:[]},
@@ -290,7 +291,15 @@ async function loadCloud(){
   try{const {data}=await sb.from('jarvis_state').select('data').eq('user_id',USER.id).maybeSingle();row=data}catch(e){console.warn('cloud load',e)}
   if(row&&row.data&&Object.keys(row.data).length){S=Object.assign(JSON.parse(JSON.stringify(DEF)),row.data)}
   else{S=JSON.parse(JSON.stringify(DEF));seedNew()}
-  migrate();cloudReady=true;await pushCloud();
+  migrate();dedupState();cloudReady=true;await pushCloud();
+}
+function dedupState(){
+  const nz=s=>(s||'').replace(/\s+/g,'').toLowerCase();
+  const seen=new Set();
+  S.events=(S.events||[]).filter(e=>{const k=e.todo?('t|'+nz(e.title)):('e|'+(e.date||'')+'|'+(e.time||'')+'|'+nz(e.title));if(seen.has(k))return false;seen.add(k);return true;});
+  const ms=new Set();
+  S.meetings=(S.meetings||[]).filter(m=>{const k=(m.date||'')+'|'+nz(m.contact)+'|'+nz(m.summary);if(ms.has(k))return false;ms.add(k);return true;});
+  ['idea','diary'].forEach(k=>{if(!S.memos||!S.memos[k])return;const mm=new Set();S.memos[k]=S.memos[k].filter(x=>{const key=nz(x.text);if(mm.has(key))return false;mm.add(key);return true;});});
 }
 
 function migrate(){
@@ -351,12 +360,15 @@ const QUICK=['비서야 오늘 뭐 챙겨야 해?','내일 일정 뭐야?','오�
 function renderQuick(){$('#quick').innerHTML='';QUICK.forEach(q=>{const b=el('button');b.textContent=q;b.onclick=()=>{$('#input').value=q;send()};$('#quick').appendChild(b)})}
 
 $('#btnClip').onclick=()=>$('#file').click();
-$('#file').onchange=e=>{[...e.target.files].forEach(f=>{const r=new FileReader();r.onload=()=>{pendingAtt.push({kind:f.type.startsWith('audio')?'audio':'image',name:f.name,dataURL:r.result});renderAtt()};r.readAsDataURL(f)});e.target.value='';};
-function renderAtt(){const w=$('#attaches');w.innerHTML='';pendingAtt.forEach((a,i)=>{const d=el('div','att');d.innerHTML=(a.kind==='audio'?'🎙 ':'🖼 ')+esc(a.name)+' <b>✕</b>';d.querySelector('b').onclick=()=>{pendingAtt.splice(i,1);renderAtt()};w.appendChild(d)})}
+function attKind(f){return f.type.startsWith('audio')?'audio':(f.type==='application/pdf'||/\.pdf$/i.test(f.name||''))?'pdf':'image';}
+function addFile(f,fallbackName){const r=new FileReader();r.onload=()=>{pendingAtt.push({kind:attKind(f),name:f.name||fallbackName||'첨부',dataURL:r.result});renderAtt()};r.readAsDataURL(f);}
+$('#file').onchange=e=>{[...e.target.files].forEach(f=>addFile(f));e.target.value='';};
+function renderAtt(){const w=$('#attaches');w.innerHTML='';pendingAtt.forEach((a,i)=>{const d=el('div','att');d.innerHTML=(a.kind==='audio'?'🎙 ':a.kind==='pdf'?'📄 ':'🖼 ')+esc(a.name)+' <b>✕</b>';d.querySelector('b').onclick=()=>{pendingAtt.splice(i,1);renderAtt()};w.appendChild(d)})}
 
 const input=$('#input');
 input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,120)+'px'});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+input.addEventListener('paste',e=>{const items=e.clipboardData&&e.clipboardData.items;if(!items)return;let got=false;for(const it of items){if(it.type&&it.type.startsWith('image/')){const f=it.getAsFile();if(f){got=true;addFile(f,'붙여넣은 이미지.png')}}}if(got){toast('🖼 이미지 첨부됨')}});
 $('#btnSend').onclick=send;
 
 async function send(){
@@ -365,7 +377,9 @@ async function send(){
   if(!S.settings.key){openSettings();toast('먼저 API 키를 넣어주세요');return}
   input.value='';input.style.height='auto';pendingAtt=[];renderAtt();
   const img=atts.find(a=>a.kind==='image');
-  S.chat.push({role:'user',text:text||'(첨부)',img:img?img.dataURL:null});save();renderChat();
+  const media=atts.filter(a=>a.kind==='image'||a.kind==='pdf');
+  const pdfNames=atts.filter(a=>a.kind==='pdf').map(a=>a.name);
+  S.chat.push({role:'user',text:(text||'(첨부)')+(pdfNames.length?'  📄 '+pdfNames.join(', '):''),img:img?img.dataURL:null});save();renderChat();
   let transcript='';
   const audio=atts.find(a=>a.kind==='audio');
   if(audio){
@@ -378,7 +392,7 @@ async function send(){
   const typing=el('div','typing');typing.textContent='자비스가 분석 중…';$('#chatscroll').appendChild(typing);$('#chatscroll').scrollTop=1e9;
   try{
     let uc=text;if(transcript)uc=(text?text+'\n\n':'')+'[녹음 전사]\n'+transcript;
-    const reply=await callAI(uc,img);typing.remove();
+    const reply=await callAI(uc,media);typing.remove();
     const {clean,actions}=parseActions(reply);
     S.chat.push({role:'bot',text:clean||'(내용 없음)'});save();renderChat();
     if(actions.length)applyActions(actions);
@@ -386,17 +400,22 @@ async function send(){
 }
 
 function historyForAPI(){return S.chat.filter(m=>m.role==='user'||m.role==='bot').slice(-20).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}))}
-async function callAI(userText,img){
+async function callAI(userText,media){
   const st=S.settings;const hist=historyForAPI();hist.pop();
+  const arr=!media?[]:Array.isArray(media)?media:[media];
   if(st.provider==='anthropic'){
-    const content=[];if(img){const m=img.dataURL.match(/^data:(.*?);base64,(.*)$/);content.push({type:'image',source:{type:'base64',media_type:m[1],data:m[2]}})}
+    const content=[];
+    for(const a of arr){const m=(a.dataURL||'').match(/^data:(.*?);base64,(.*)$/);if(!m)continue;
+      if(a.kind==='pdf')content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:m[2]}});
+      else content.push({type:'image',source:{type:'base64',media_type:m[1],data:m[2]}});}
     content.push({type:'text',text:userText});
     const body={model:st.model||'claude-sonnet-4-6',max_tokens:1600,system:sysPrompt(),messages:[...hist,{role:'user',content}]};
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':st.key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body)});
     const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
     return j.content.map(b=>b.text||'').join('');
   }else{
-    const um={role:'user',content:img?[{type:'text',text:userText},{type:'image_url',image_url:{url:img.dataURL}}]:userText};
+    const oimg=arr.find(a=>a.kind==='image');
+    const um={role:'user',content:oimg?[{type:'text',text:userText},{type:'image_url',image_url:{url:oimg.dataURL}}]:userText};
     const body={model:st.model||'gpt-4o',messages:[{role:'system',content:sysPrompt()},...hist,um]};
     const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+st.key,'content-type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
@@ -414,13 +433,22 @@ function parseActions(text){
   const clean=text.slice(0,i).trim();let actions=[];try{actions=JSON.parse(text.slice(i+11).trim())}catch(e){}
   return{clean,actions:Array.isArray(actions)?actions:[]};
 }
+const norm=s=>(s||'').replace(/\s+/g,'').toLowerCase();
 function applyActions(actions){
   const names=[];
   actions.forEach(a=>{
-    if(a.type==='event'){S.events.push({id:id(),date:a.date||'',time:a.time||'',title:a.title,note:a.note||'',src:'ai'});names.push('📅 일정: '+(a.date||'')+' '+a.title)}
-    else if(a.type==='todo'){S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true});names.push('✅ 할일: '+a.title)}
-    else if(a.type==='meeting'){const cat=['internal','external','lecture'].includes(a.cat)?a.cat:'external';S.meetings.push({id:id(),cat,contact:a.contact||'기타',date:a.date||today(),summary:a.summary||'',points:a.points||[],followups:a.followups||[]});names.push('🗂 '+CATLABEL[cat]+': '+(a.contact||''))}
-    else if(a.type==='memo'){const k=a.kind==='diary'?'diary':'idea';S.memos[k].unshift({id:id(),date:today(),text:a.text||''});names.push(k==='idea'?'💡 아이디어 저장':'📔 창업일기 저장')}
+    if(a.type==='event'){
+      if(S.events.some(e=>!e.todo&&e.date===(a.date||'')&&norm(e.title)===norm(a.title)))return;
+      S.events.push({id:id(),date:a.date||'',time:a.time||'',title:a.title,note:a.note||'',src:'ai'});names.push('📅 일정: '+(a.date||'')+' '+a.title)}
+    else if(a.type==='todo'){
+      if(S.events.some(e=>e.todo&&norm(e.title)===norm(a.title)))return;
+      S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,due:a.due||''});names.push('✅ 할일: '+a.title)}
+    else if(a.type==='meeting'){const cat=['internal','external','lecture'].includes(a.cat)?a.cat:'external';
+      if(S.meetings.some(m=>m.date===(a.date||today())&&norm(m.contact)===norm(a.contact)&&norm(m.summary)===norm(a.summary)))return;
+      S.meetings.push({id:id(),cat,contact:a.contact||'기타',date:a.date||today(),summary:a.summary||'',points:a.points||[],followups:a.followups||[]});names.push('🗂 '+CATLABEL[cat]+': '+(a.contact||''))}
+    else if(a.type==='memo'){const k=a.kind==='diary'?'diary':'idea';
+      if(S.memos[k].some(x=>norm(x.text)===norm(a.text)))return;
+      S.memos[k].unshift({id:id(),date:today(),text:a.text||''});names.push(k==='idea'?'💡 아이디어 저장':'📔 창업일기 저장')}
   });
   if(names.length){names.forEach(n=>S.chat.push({role:'saved',text:n}));save();renderChat();badges()}
 }
@@ -451,11 +479,13 @@ function dayPanel(){
   const evs=S.events.filter(e=>e.date===calSel).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   if(!evs.length)h+='<div class="empty" style="padding:22px 10px">이 날 일정이 없어요.</div>';
   else evs.forEach(e=>h+=evRow(e));
-  const todos=S.events.filter(e=>!e.date);
+  const dueOf=e=>{const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);return m?m[1]:'';};
+  const todos=S.events.filter(e=>!e.date).sort((a,b)=>(dueOf(a)||'9999').localeCompare(dueOf(b)||'9999'));
   if(todos.length){h+='<div class="grp-h" style="margin-top:12px">🔖 날짜 미정 · 할 일</div>';todos.forEach(e=>h+=evRow(e,true))}
   return h;
 }
-function evRow(e,td){return `<div class="ev"><div class="when">${td?'-':esc(e.time||'종일')}</div><div style="flex:1"><b>${esc(e.title)}</b>${e.note?`<span>${esc(e.note)}</span>`:''}</div><span class="del" data-id="${e.id}">✕</span></div>`}
+function evRow(e,td){let tag='';if(td){const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);if(m&&m[1]<today())tag=' <span style="color:#F87171;font-size:11px;font-weight:700;background:rgba(248,113,113,.13);padding:1px 6px;border-radius:6px">지연</span>';}
+  return `<div class="ev"><div class="when">${td?'✓':esc(e.time||'종일')}</div><div style="flex:1"><b>${esc(e.title)}${tag}</b>${e.note?`<span>${esc(e.note)}</span>`:''}</div><span class="del" data-id="${e.id}" title="완료·삭제">✕</span></div>`}
 function bindCal(){
   const w=$('#calList');
   w.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const n=b.dataset.nav;if(n==='tw'||n==='tm'){calSel=today();renderCal();return}
