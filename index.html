@@ -345,19 +345,24 @@ function badges(){
 
 /* ---------- chat ---------- */
 let pendingAtt=[];
-function renderChat(){
+let chatShown=30;
+function renderChat(mode){
   const c=$('#chatscroll');c.innerHTML='';
   const hero=el('div','core');const te=S.events.filter(e=>e.date===today()).length;
   hero.innerHTML=`<div class="orb"></div><div class="jt">J.A.R.V.I.S</div><div class="js">PERSONAL AI ASSISTANT · POWERED BY CLAUDE</div>
     <div class="stats"><span class="s">오늘 일정 <b>${te}</b></span><span class="s">회의록 <b>${S.meetings.length}</b></span><span class="s">메모 <b>${S.memos.idea.length+S.memos.diary.length}</b></span><span class="s">${today()}</span></div>`;
   c.appendChild(hero);
-  S.chat.forEach(m=>{
+  const total=S.chat.length;const start=Math.max(0,total-chatShown);
+  if(start>0){const lb=el('div');lb.textContent='↑ 이전 대화 불러오기 ('+start+'개 더)';
+    lb.style.cssText='align-self:center;margin:2px 0 6px;padding:7px 16px;font-size:12.5px;color:#8Fc7ff;background:rgba(56,189,248,.09);border:1px solid rgba(56,189,248,.28);border-radius:16px;cursor:pointer';
+    lb.onclick=()=>{chatShown+=40;renderChat('keeptop')};c.appendChild(lb)}
+  S.chat.slice(start).forEach(m=>{
     if(m.role==='user'){const d=el('div','m user');d.innerHTML=esc(m.text)+(m.img?`<img src="${m.img}">`:'');c.appendChild(d)}
     else if(m.role==='bot'){const w=el('div','m bot');w.innerHTML=`<div class="av">J</div><div class="bubble">${esc(m.text)}</div>`;c.appendChild(w)}
     else if(m.role==='saved'){const d=el('div','saved');d.textContent='✓ '+m.text;c.appendChild(d)}
     else{const d=el('div','m');d.textContent=m.text;c.appendChild(d)}
   });
-  c.scrollTop=c.scrollHeight;
+  if(mode==='keeptop')c.scrollTop=60;else c.scrollTop=c.scrollHeight;
 }
 const QUICK=['비서야 오늘 뭐 챙겨야 해?','내일 일정 뭐야?','오늘 직원회의 내용 정리할게','아이디어 하나 메모할게'];
 function renderQuick(){$('#quick').innerHTML='';QUICK.forEach(q=>{const b=el('button');b.textContent=q;b.onclick=()=>{$('#input').value=q;send()};$('#quick').appendChild(b)})}
