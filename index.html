@@ -442,10 +442,41 @@ async function callAI(userText,media){
     return j.choices[0].message.content;
   }
 }
-async function whisper(dataURL,name){
-  const blob=await (await fetch(dataURL)).blob();const fd=new FormData();fd.append('file',blob,name||'audio.m4a');fd.append('model','whisper-1');
+async function whisperBlob(blob,name){
+  const fd=new FormData();fd.append('file',blob,name||'audio.m4a');fd.append('model','whisper-1');
   const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{'Authorization':'Bearer '+S.settings.whisper},body:fd});
   const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);return j.text;
+}
+function encodeWAV(samples,rate){
+  const buf=new ArrayBuffer(44+samples.length*2);const view=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');view.setUint32(4,36+samples.length*2,true);w(8,'WAVE');w(12,'fmt ');
+  view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+  view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);
+  w(36,'data');view.setUint32(40,samples.length*2,true);
+  let o=44;for(let i=0;i<samples.length;i++){let s=Math.max(-1,Math.min(1,samples[i]));view.setInt16(o,s<0?s*0x8000:s*0x7FFF,true);o+=2}
+  return buf;
+}
+// 큰 녹음: 16kHz 모노로 변환 후 ~9분 단위로 잘라 전사 (Whisper 25MB 제한 우회)
+async function whisperBig(blob){
+  const AC=window.AudioContext||window.webkitAudioContext;const actx=new AC();
+  const decoded=await actx.decodeAudioData(await blob.arrayBuffer());if(actx.close)actx.close();
+  const rate=16000;const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(decoded.duration*rate)),rate);
+  const src=off.createBufferSource();src.buffer=decoded;src.connect(off.destination);src.start();
+  const rendered=await off.startRendering();const data=rendered.getChannelData(0);
+  const chunkLen=9*60*rate;const parts=[];let idx=0;const totalChunks=Math.ceil(data.length/chunkLen);
+  for(let i=0;i<data.length;i+=chunkLen){idx++;
+    const seg=data.subarray(i,Math.min(i+chunkLen,data.length));
+    const t=el('div','typing');t.textContent='🎙 녹음 전사 중… ('+idx+'/'+totalChunks+' 구간)';const cs=$('#chatscroll');if(cs){cs.appendChild(t);cs.scrollTop=1e9}
+    const txt=await whisperBlob(new Blob([encodeWAV(seg,rate)],{type:'audio/wav'}),'chunk'+idx+'.wav');
+    t.remove();parts.push(txt);
+  }
+  return parts.join('\n');
+}
+async function whisper(dataURL,name){
+  const blob=await (await fetch(dataURL)).blob();
+  if(blob.size<=24*1024*1024)return whisperBlob(blob,name);
+  return whisperBig(blob);
 }
 
 function parseActions(text){
