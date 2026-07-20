@@ -152,7 +152,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v9</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v11</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -163,7 +163,6 @@
     <div class="t on" data-v="chat"><span class="ic">💬</span>대화</div>
     <div class="t" data-v="cal"><span class="ic">📅</span>일정<span class="badge" id="bCal" style="display:none"></span></div>
     <div class="t" data-v="meet"><span class="ic">🗂</span>회의록<span class="badge" id="bMeet" style="display:none"></span></div>
-    <div class="t" data-v="rec"><span class="ic">🎙</span>녹음<span class="badge" id="bRec" style="display:none"></span></div>
     <div class="t" data-v="memo"><span class="ic">📝</span>메모<span class="badge" id="bMemo" style="display:none"></span></div>
   </div>
 
@@ -191,11 +190,6 @@
     <div class="vhead"><h2>🗂 회의록</h2></div>
     <div class="seg2" id="meetCat"><button data-c="internal">내부회의</button><button data-c="external" class="on">외부회의</button><button data-c="lecture">강의·컨설팅</button></div>
     <div id="meetList"></div>
-  </div></section>
-
-  <section class="view" id="v-rec"><div class="vwrap">
-    <div class="vhead"><h2>🎙 녹음</h2><button class="add" id="addRec">+ 녹음 올리기</button></div>
-    <div id="recList"></div>
   </div></section>
 
   <section class="view" id="v-memo"><div class="vwrap">
@@ -269,6 +263,11 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 - {"type":"memo","kind":"idea|diary","text":"내용"}  (idea=갑자기 떠오른 아이디어 · diary=창업일기·한풀이·감정)
 - {"type":"update","match":"기존 일정 제목 일부","note":"추가할 내용(연락처·장소·준비물 등)"}  (이미 등록된 일정/할일에 정보 덧붙이기. 새로 만들지 말 것. match는 기존 제목의 핵심 단어)
 회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.
+[녹음 처리 — 매우 중요] 대표님이 녹음(전사 원문)을 보내면, 그건 회의록으로 정리하는 자료다(별도 '녹음 보관함'은 없다).
+  1) 대표님이 정리할 '건/주제'(회의록 폴더명)를 이미 말했으면(예: "아펙스 투자건으로 정리해줘") → 바로 그 이름을 contact로 meeting 저장. 같은 이름의 폴더가 이미 있으면 자연히 그 폴더 히스토리에 이어 쌓인다(같은 contact면 같은 폴더).
+  2) 주제를 안 말했으면 → 전사 원문을 짧게 분석해 "이 통화는 ○○○ 건 같은데, '○○○'로 정리할까요? (다른 이름 원하시면 말씀해 주세요)"처럼 폴더명을 제안하며 되물어라. 대표님이 확정하면 그 이름으로 meeting 저장.
+  3) meeting의 points에는 통화 핵심을, summary엔 한 줄 요약을 담아라. 원문 전체는 앱이 자동으로 그 회의록 항목에 '원본 녹음 텍스트'로 보관하니, 답변이나 points에 원문 전체를 다시 붙이지 마라.
+  4) 상대가 거래처/투자사면 external, 내부 직원이면 internal, 강의·컨설팅이면 lecture.
 [저장 톤] @@ACTIONS@@ 는 앱이 처리하는 내부 표기이니 답변 본문에는 절대 노출하지 말 것. 앱이 저장되면 자동으로 '✓' 확인 칩을 대표님께 보여주니, 답변에서 저장한 항목을 장황하게 나열하거나 "노출시켜 죄송하다"는 식으로 사과하지 말 것. 저장 언급은 "일정/할일에 넣어뒀어요" 정도로 짧고 자연스럽게. 같은 내용을 이미 등록했으면 또 등록하지 말 것.`;
 
 /* ---------- state + 클라우드(Supabase) ---------- */
@@ -284,7 +283,7 @@ let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=nul
 
 function save(){localStorage.setItem('jarvis_cache',JSON.stringify(S));if(cloudReady){pendingSave=true;clearTimeout(saveTimer);saveTimer=setTimeout(pushCloud,700)}}
 async function pushCloud(){if(!USER)return;const ts=new Date().toISOString();try{await sb.from('jarvis_state').upsert({user_id:USER.id,data:S,updated_at:ts});lastServerTs=ts}catch(e){console.warn('cloud save',e)}finally{pendingSave=false}}
-function rerenderCurrent(){renderChat();badges();if(curView==='cal')renderCal();else if(curView==='meet')renderMeet();else if(curView==='rec')renderRec();else if(curView==='memo')renderMemo();}
+function rerenderCurrent(){renderChat();badges();if(curView==='cal')renderCal();else if(curView==='meet')renderMeet();else if(curView==='memo')renderMemo();}
 async function pollCloud(){
   if(!USER||!cloudReady||pendingSave||saveTimer)return;
   try{const {data}=await sb.from('jarvis_state').select('updated_at').eq('user_id',USER.id).maybeSingle();
@@ -349,11 +348,11 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet')renderMeet();if(v==='rec')renderRec();if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet')renderMeet();if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
-  set('#bCal',S.events.length);set('#bMeet',S.meetings.length);set('#bRec',S.recordings.length);
+  set('#bCal',S.events.length);set('#bMeet',S.meetings.length);
   set('#bMemo',(S.memos.idea.length+S.memos.diary.length));
 }
 
@@ -407,13 +406,15 @@ async function send(){
   if(audio){
     if(!S.settings.whisper){S.chat.push({role:'bot',text:'녹음을 전사하려면 설정에 OpenAI 키(Whisper)가 필요해요. 우선 텍스트로 적어주시면 정리할게요.'});save();renderChat();}
     else{const t=el('div','typing');t.textContent='🎙 녹음 전사 중…';$('#chatscroll').appendChild(t);
-      try{transcript=await whisper(audio.dataURL,audio.name);t.remove();S.recordings.push({id:id(),title:audio.name,date:today(),summary:transcript.slice(0,300)});S.chat.push({role:'saved',text:'녹음 전사 완료'});save();renderChat();badges()}
+      try{transcript=await whisper(audio.dataURL,audio.name);t.remove();S._pendingRaw=transcript;S.chat.push({role:'saved',text:'녹음 전사 완료 — 어떤 건으로 정리할지 말씀해 주세요'});save();renderChat()}
       catch(e){t.remove();S.chat.push({role:'bot',text:'녹음 전사 실패: '+e.message});save();renderChat();return}
     }
   }
   const typing=el('div','typing');typing.textContent='자비스가 분석 중…';$('#chatscroll').appendChild(typing);$('#chatscroll').scrollTop=1e9;
   try{
-    let uc=text;if(transcript)uc=(text?text+'\n\n':'')+'[녹음 전사]\n'+transcript;
+    let uc=text;
+    if(transcript)uc=(text?text+'\n\n':'')+'[방금 업로드한 녹음 전사 원문]\n'+transcript;
+    else if(S._pendingRaw)uc=(text||'')+'\n\n[참고 — 앞서 전사한 녹음 원문]\n'+S._pendingRaw;
     const reply=await callAI(uc,media);typing.remove();
     const {clean,actions}=parseActions(reply);
     S.chat.push({role:'bot',text:clean||'(내용 없음)'});save();renderChat();
@@ -469,16 +470,24 @@ async function whisperBig(blob){
   const chunkLen=9*60*rate;const parts=[];let idx=0;const totalChunks=Math.ceil(data.length/chunkLen);
   for(let i=0;i<data.length;i+=chunkLen){idx++;
     const seg=data.subarray(i,Math.min(i+chunkLen,data.length));
-    const t=el('div','typing');t.textContent='🎙 녹음 전사 중… ('+idx+'/'+totalChunks+' 구간)';const cs=$('#chatscroll');if(cs){cs.appendChild(t);cs.scrollTop=1e9}
+    let t=null;if(totalChunks>1){t=el('div','typing');t.textContent='🎙 녹음 전사 중… ('+idx+'/'+totalChunks+' 구간)';const cs=$('#chatscroll');if(cs){cs.appendChild(t);cs.scrollTop=1e9}}
     const txt=await whisperBlob(new Blob([encodeWAV(seg,rate)],{type:'audio/wav'}),'chunk'+idx+'.wav');
-    t.remove();parts.push(txt);
+    if(t)t.remove();parts.push(txt);
   }
   return parts.join('\n');
 }
+// 어떤 형식이든 브라우저로 디코딩→WAV 변환 후 전사 (형식·용량 문제 모두 해결). 실패 시 원본 직접 전송.
 async function whisper(dataURL,name){
   const blob=await (await fetch(dataURL)).blob();
-  if(blob.size<=24*1024*1024)return whisperBlob(blob,name);
-  return whisperBig(blob);
+  try{
+    return await whisperBig(blob);
+  }catch(e){
+    console.warn('decode 변환 실패, 원본 직접 시도',e);
+    try{ return await whisperBlob(blob,name); }
+    catch(e2){
+      throw new Error('이 녹음 형식을 처리하지 못했어요. m4a·mp3·wav·mp4·ogg 형식이면 잘 돼요. 삼성 통화녹음이 AMR 형식이면 안 될 수 있으니, 녹음 설정에서 형식을 바꾸거나 다른 앱으로 저장해보세요.');
+    }
+  }
 }
 
 function parseActions(text){
@@ -498,7 +507,10 @@ function applyActions(actions){
       S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,due:a.due||''});names.push('✅ 할일: '+a.title)}
     else if(a.type==='meeting'){const cat=['internal','external','lecture'].includes(a.cat)?a.cat:'external';
       if(S.meetings.some(m=>m.date===(a.date||today())&&norm(m.contact)===norm(a.contact)&&norm(m.summary)===norm(a.summary)))return;
-      S.meetings.push({id:id(),cat,contact:a.contact||'기타',date:a.date||today(),summary:a.summary||'',points:a.points||[],followups:a.followups||[]});names.push('🗂 '+CATLABEL[cat]+': '+(a.contact||''))}
+      const raw=a.raw||S._pendingRaw||'';
+      S.meetings.push({id:id(),cat,contact:a.contact||'기타',date:a.date||today(),summary:a.summary||'',points:a.points||[],followups:a.followups||[],raw});
+      if(S._pendingRaw)S._pendingRaw='';
+      names.push('🗂 '+CATLABEL[cat]+': '+(a.contact||''))}
     else if(a.type==='memo'){const k=a.kind==='diary'?'diary':'idea';
       if(S.memos[k].some(x=>norm(x.text)===norm(a.text)))return;
       S.memos[k].unshift({id:id(),date:today(),text:a.text||''});names.push(k==='idea'?'💡 아이디어 저장':'📔 창업일기 저장')}
@@ -595,27 +607,16 @@ function renderMeet(){
         h+=`<div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)} <span class="del" data-id="${m.id}" style="float:right;color:#456;cursor:pointer">✕</span></div>`;
         (m.points||[]).forEach(p=>h+=`<div class="li">${esc(p)}</div>`);
         (m.followups||[]).forEach(f=>h+=`<div class="li" style="color:#FBBF24">확인: ${esc(f)}</div>`);
+        if(m.raw)h+=`<button class="rawbtn" data-raw="${m.id}" style="margin:6px 0 2px;font-size:12px;color:#8FD3FF;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:5px 11px;cursor:pointer">📄 원본 녹음 텍스트 보기</button><div class="rawtext" id="raw-${m.id}" style="display:none;white-space:pre-wrap;font-size:12.5px;color:#B9CCE6;background:#0A1120;border:1px solid rgba(56,189,248,.15);border-radius:8px;padding:10px;margin-top:6px;max-height:320px;overflow:auto">${esc(m.raw)}</div>`;
       });
       h+='</div></div>';
     });
   });
   w.innerHTML=h;
   w.querySelectorAll('.del').forEach(x=>x.onclick=()=>{S.meetings=S.meetings.filter(m=>m.id!==x.dataset.id);save();renderMeet();badges()});
+  w.querySelectorAll('[data-raw]').forEach(b=>b.onclick=()=>{const d=$('#raw-'+b.dataset.raw);if(!d)return;const show=d.style.display==='none';d.style.display=show?'block':'none';b.textContent=show?'📄 원본 닫기':'📄 원본 녹음 텍스트 보기'});
 }
 
-/* ---------- 녹음 ---------- */
-function renderRec(){
-  const w=$('#recList');
-  if(!S.recordings.length){w.innerHTML=empty('🎙','녹음이 없어요. 📎로 녹음 파일을 올리면 전사·정리하고 할 일을 제안해요. (전사엔 설정의 OpenAI 키 필요)');return}
-  w.innerHTML='';S.recordings.slice().reverse().forEach(r=>{const c=el('div','card');c.innerHTML=`<div class="cb"><b style="color:#DCEEFF">🎙 ${esc(r.title)}</b><div style="font-size:12px;color:var(--muted)">${esc(r.date)}</div><div style="margin-top:6px;font-size:13px;color:#C6D6EC">${esc(r.summary)}</div></div>`;w.appendChild(c)});
-}
-$('#addRec').onclick=()=>{openAdd(`<h3>녹음 올리기</h3><p>파일을 선택하면 전사·정리합니다. (설정에 OpenAI 키 필요) · 대화창 📎로도 가능</p>
-  <div class="fld"><input type="file" id="axF" accept="audio/*"></div>
-  <button class="btn" onclick="saveRec()">전사·저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`)};
-window.saveRec=async()=>{const f=$('#axF').files[0];if(!f)return;if(!S.settings.whisper){toast('설정에 OpenAI 키를 넣어주세요');return}
-  const r=new FileReader();r.onload=async()=>{closeAdd();toast('전사 중…');try{const tx=await whisper(r.result,f.name);
-    S.recordings.push({id:id(),title:f.name,date:today(),summary:tx.slice(0,300)});save();renderRec();badges();
-    S.chat.push({role:'user',text:'[녹음 업로드] '+f.name});const rep=await callAI('[녹음 전사]\n'+tx,null);const {clean,actions}=parseActions(rep);S.chat.push({role:'bot',text:clean});save();if(actions.length)applyActions(actions);toast('완료 — 대화 탭에서 제안 확인')}catch(e){toast('실패: '+e.message)}};r.readAsDataURL(f)};
 
 /* ---------- 메모 ---------- */
 $('#memoKind').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;memoKind=b.dataset.k;document.querySelectorAll('#memoKind button').forEach(x=>x.classList.toggle('on',x===b));renderMemo()});
