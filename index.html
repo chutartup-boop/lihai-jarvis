@@ -152,7 +152,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v11</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v12</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -262,16 +262,19 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
      · ★대표님이 "회의록에 넣어줘 / 내부회의에 넣어줘" 등 저장을 명시하면, 답변이 아무리 길어도 반드시 맨 끝에 이 meeting 액션을 넣어라. cat은 지시한 분류(내부회의=internal)로. 절대 빠뜨리지 마라.
 - {"type":"memo","kind":"idea|diary","text":"내용"}  (idea=갑자기 떠오른 아이디어 · diary=창업일기·한풀이·감정)
 - {"type":"update","match":"기존 일정 제목 일부","note":"추가할 내용(연락처·장소·준비물 등)"}  (이미 등록된 일정/할일에 정보 덧붙이기. 새로 만들지 말 것. match는 기존 제목의 핵심 단어)
+- {"type":"meeting_edit","match":"수정할 폴더/상대명","summary":"새 한줄요약","points":["수정된 핵심들"],"followups":["확인할것"]}  (★이미 저장된 회의록 항목의 내용을 고칠 때. 새 meeting을 만들지 말고 이걸 써라. 폴더명을 바꾸려면 "newContact":"새이름"도 넣어라)
 회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.
 [녹음 처리 — 매우 중요] 대표님이 녹음(전사 원문)을 보내면, 그건 회의록으로 정리하는 자료다(별도 '녹음 보관함'은 없다).
   1) 대표님이 정리할 '건/주제'(회의록 폴더명)를 이미 말했으면(예: "아펙스 투자건으로 정리해줘") → 바로 그 이름을 contact로 meeting 저장. 같은 이름의 폴더가 이미 있으면 자연히 그 폴더 히스토리에 이어 쌓인다(같은 contact면 같은 폴더).
   2) 주제를 안 말했으면 → 전사 원문을 짧게 분석해 "이 통화는 ○○○ 건 같은데, '○○○'로 정리할까요? (다른 이름 원하시면 말씀해 주세요)"처럼 폴더명을 제안하며 되물어라. 대표님이 확정하면 그 이름으로 meeting 저장.
   3) meeting의 points에는 통화 핵심을, summary엔 한 줄 요약을 담아라. 원문 전체는 앱이 자동으로 그 회의록 항목에 '원본 녹음 텍스트'로 보관하니, 답변이나 points에 원문 전체를 다시 붙이지 마라.
   4) 상대가 거래처/투자사면 external, 내부 직원이면 internal, 강의·컨설팅이면 lecture.
+  5) 폴더명(contact)은 깔끔한 이름 그대로 써라. 절대 "백석호 이사(사업추진 히스토리)"처럼 괄호로 설명을 붙이지 마라. 그냥 "백석호 이사" 또는 "아펙스 투자건"처럼.
+[수정 요청 구분 — 매우 중요] 대표님이 "방금 그거 수정해줘 / ○○ 내용 고쳐줘 / 단어 바꿔줘"처럼 이미 정리된 내용을 고쳐달라고 하면, 절대 회의록에 새 항목을 또 만들지 마라. 반드시 meeting_edit 액션으로 기존 항목을 고쳐라. (녹음을 새로 올린 게 아니면 = 수정 요청이다) 폴더 이동/이름변경도 meeting_edit의 newContact로.
 [저장 톤] @@ACTIONS@@ 는 앱이 처리하는 내부 표기이니 답변 본문에는 절대 노출하지 말 것. 앱이 저장되면 자동으로 '✓' 확인 칩을 대표님께 보여주니, 답변에서 저장한 항목을 장황하게 나열하거나 "노출시켜 죄송하다"는 식으로 사과하지 말 것. 저장 언급은 "일정/할일에 넣어뒀어요" 정도로 짧고 자연스럽게. 같은 내용을 이미 등록했으면 또 등록하지 말 것.`;
 
 /* ---------- state + 클라우드(Supabase) ---------- */
-const DEF={_v:3,chat:[],events:[],meetings:[],recordings:[],memos:{idea:[],diary:[]},
+const DEF={_v:3,chat:[],events:[],meetings:[],recordings:[],folders:{internal:[],external:[],lecture:[]},memos:{idea:[],diary:[]},
   settings:{provider:'anthropic',key:'',model:'claude-sonnet-4-6',whisper:''}};
 let S=JSON.parse(JSON.stringify(DEF));
 const CATLABEL={internal:'내부회의',external:'외부회의',lecture:'강의·컨설팅'};
@@ -318,7 +321,9 @@ function dedupState(){
   ['idea','diary'].forEach(k=>{if(!S.memos||!S.memos[k])return;const mm=new Set();S.memos[k]=S.memos[k].filter(x=>{const key=nz(x.text);if(mm.has(key))return false;mm.add(key);return true;});});
 }
 
+function ensureFolders(){if(!S.folders||Array.isArray(S.folders))S.folders={internal:[],external:[],lecture:[]};['internal','external','lecture'].forEach(k=>{if(!Array.isArray(S.folders[k]))S.folders[k]=[]});}
 function migrate(){
+  ensureFolders();
   if(S._v===3){ if(!S.memos)S.memos={idea:[],diary:[]}; return; }
   if(S.meetings && !Array.isArray(S.meetings)){
     const arr=[];Object.keys(S.meetings).forEach(k=>{(S.meetings[k]||[]).forEach(m=>arr.push({id:m.id||id(),cat:'external',contact:k,date:m.date||today(),summary:m.summary||'',points:m.points||[],followups:m.followups||[]}))});S.meetings=arr;
@@ -337,7 +342,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 const WD=['일','월','화','수','목','금','토'];
 function dstr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function parseD(s){const p=(s||today()).split('-').map(Number);return new Date(p[0],p[1]-1,p[2])}
-let calSel=today(),calMode='week',meetCat='external',memoKind='idea';
+let calSel=today(),calMode='week',meetCat='external',meetFolder=null,memoKind='idea';
 function sysPrompt(){const n=new Date();return LIHAI+"\n\n[오늘] "+today()+" ("+WD[n.getDay()]+"요일). '내일','다음 주 화요일' 등은 이 날짜 기준으로 실제 YYYY-MM-DD를 계산하세요.";}
 function esc(s){return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 const $=s=>document.querySelector(s);
@@ -348,7 +353,7 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet')renderMeet();if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
@@ -518,6 +523,18 @@ function applyActions(actions){
       let ev=mt?S.events.find(e=>norm(e.title).includes(mt)):null;
       if(!ev&&mt.length>=3)ev=S.events.find(e=>norm(e.title).includes(mt.slice(0,3)));
       if(ev&&add){if(norm(ev.note||'').includes(norm(add)))return;ev.note=(ev.note?ev.note+' / ':'')+add;names.push('✏️ '+ev.title+'에 추가')}}
+    else if(a.type==='meeting_edit'){const mt=norm(a.match||a.contact||'');
+      // 가장 최근에 매칭되는 회의록 항목을 찾아 내용 수정(새로 만들지 않음)
+      let cand=S.meetings.filter(m=>mt&&norm(m.contact).includes(mt)).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+      const m=cand[0];
+      if(m){
+        if(a.newContact){const nc=a.newContact.trim();if(nc)m.contact=nc;}
+        if(a.summary!=null)m.summary=a.summary;
+        if(Array.isArray(a.points))m.points=a.points;
+        if(Array.isArray(a.followups))m.followups=a.followups;
+        if(a.cat&&['internal','external','lecture'].includes(a.cat))m.cat=a.cat;
+        names.push('✏️ 회의록 수정: '+m.contact)}
+      }
   });
   if(names.length){names.forEach(n=>S.chat.push({role:'saved',text:n}));save();renderChat();badges()}
 }
@@ -589,33 +606,65 @@ function addEventForm(date){openAdd(`<h3>일정 추가</h3>
 $('#addEvent').onclick=()=>addEventForm(calSel);
 window.saveEvent2=()=>{const t=$('#axT').value.trim();if(!t){toast('내용을 입력하세요');return}const d=$('#axD').value||today();S.events.push({id:id(),date:d,time:$('#axTime').value,title:t,note:$('#axN').value,src:'manual'});save();closeAdd();calSel=d;renderCal();badges()};
 
-/* ---------- 회의록 ---------- */
-$('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
+/* ---------- 회의록 (2단계: 폴더 목록 → 폴더 히스토리) ---------- */
+$('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;meetFolder=null;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
+function folderList(cat){
+  ensureFolders();const set={};
+  S.meetings.filter(m=>m.cat===cat).forEach(m=>{const k=m.contact||'기타';(set[k]=set[k]||{n:0,last:''});set[k].n++;if((m.date||'')>set[k].last)set[k].last=m.date||''});
+  (S.folders[cat]||[]).forEach(k=>{if(!set[k])set[k]={n:0,last:''}});
+  return Object.keys(set).map(k=>({name:k,n:set[k].n,last:set[k].last})).sort((a,b)=>(b.last||'').localeCompare(a.last||''));
+}
 function renderMeet(){
-  const w=$('#meetList');const ms=S.meetings.filter(m=>m.cat===meetCat);
-  if(!ms.length){w.innerHTML=empty('🗂',CATLABEL[meetCat]+' 기록이 없어요.<br>대화로 회의 내용을 보내면 월별·상대별로 쌓여요.');return}
-  const byMonth={};ms.forEach(m=>{const mo=(m.date||'').slice(0,7)||'날짜미상';(byMonth[mo]=byMonth[mo]||[]).push(m)});
-  const months=Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));
-  let h='';
-  months.forEach(mo=>{
-    const label=mo==='날짜미상'?'날짜 미상':(mo.slice(0,4)+'년 '+Number(mo.slice(5,7))+'월');
-    h+=`<div class="month-h" style="display:flex;align-items:center;gap:8px;margin:14px 2px 8px;font-weight:800;color:#8FD3FF;font-size:14px;border-left:3px solid #38BDF8;padding-left:9px">🗓 ${label}<span style="font-weight:600;color:var(--muted);font-size:12px">${byMonth[mo].length}건</span></div>`;
-    const g={};byMonth[mo].forEach(m=>{(g[m.contact||'기타']=g[m.contact||'기타']||[]).push(m)});
-    Object.keys(g).forEach(k=>{
-      h+=`<div class="card"><div class="cb"><div class="mt-contact">👤 ${esc(k)} <span class="chip b">${g[k].length}회</span></div>`;
-      g[k].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(m=>{
-        h+=`<div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)} <span class="del" data-id="${m.id}" style="float:right;color:#456;cursor:pointer">✕</span></div>`;
-        (m.points||[]).forEach(p=>h+=`<div class="li">${esc(p)}</div>`);
-        (m.followups||[]).forEach(f=>h+=`<div class="li" style="color:#FBBF24">확인: ${esc(f)}</div>`);
-        if(m.raw)h+=`<button class="rawbtn" data-raw="${m.id}" style="margin:6px 0 2px;font-size:12px;color:#8FD3FF;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:5px 11px;cursor:pointer">📄 원본 녹음 텍스트 보기</button><div class="rawtext" id="raw-${m.id}" style="display:none;white-space:pre-wrap;font-size:12.5px;color:#B9CCE6;background:#0A1120;border:1px solid rgba(56,189,248,.15);border-radius:8px;padding:10px;margin-top:6px;max-height:320px;overflow:auto">${esc(m.raw)}</div>`;
-      });
-      h+='</div></div>';
+  const w=$('#meetList');ensureFolders();
+  if(meetFolder===null){ // 폴더 목록
+    const folders=folderList(meetCat);
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 12px"><span style="color:var(--muted);font-size:13px">${CATLABEL[meetCat]} · 폴더 ${folders.length}개</span><button class="add" onclick="addFolderForm()">+ 새 폴더</button></div>`;
+    if(!folders.length){h+=empty('🗂',CATLABEL[meetCat]+' 폴더가 없어요.<br>대화로 회의·녹음을 정리하거나 "+ 새 폴더"로 만들어보세요.');}
+    folders.forEach(f=>{
+      h+=`<div class="card folder-item" data-folder="${encodeURIComponent(f.name)}" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <div><div class="mt-contact">📁 ${esc(f.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${f.n}건${f.last?' · 최근 '+esc(f.last):' · 비어있음'}</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="chip b">${f.n}</span><span style="color:#456;cursor:pointer" data-delfolder="${encodeURIComponent(f.name)}" title="폴더 삭제">✕</span><span style="color:#8FD3FF">›</span></div></div>`;
     });
+    w.innerHTML=h;
+    w.querySelectorAll('[data-folder]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('[data-delfolder]'))return;meetFolder=decodeURIComponent(x.dataset.folder);renderMeet()});
+    w.querySelectorAll('[data-delfolder]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const nm=decodeURIComponent(x.dataset.delfolder);if(!confirm('"'+nm+'" 폴더와 그 안의 회의 기록을 모두 삭제할까요?'))return;S.meetings=S.meetings.filter(m=>!(m.cat===meetCat&&(m.contact||'기타')===nm));S.folders[meetCat]=(S.folders[meetCat]||[]).filter(x=>x!==nm);save();renderMeet();badges()});
+    return;
+  }
+  // 폴더 히스토리
+  const ms=S.meetings.filter(m=>m.cat===meetCat&&(m.contact||'기타')===meetFolder).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 2px 12px"><button class="add" onclick="backFolders()" style="background:rgba(56,189,248,.12)">← 폴더 목록</button><span style="font-weight:800;color:#8FD3FF">📁 ${esc(meetFolder)}</span></div>`;
+  if(!ms.length){h+=empty('🗂','이 폴더는 아직 비어있어요.<br>대화에서 이 폴더로 회의·녹음을 정리해보세요.');}
+  ms.forEach(m=>{
+    h+=`<div class="card"><div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)}<span style="float:right"><span data-editm="${m.id}" title="수정" style="opacity:.6;cursor:pointer;margin-right:8px">✎</span><span class="del" data-id="${m.id}" style="color:#456;cursor:pointer" title="삭제">✕</span></span></div>`;
+    (m.points||[]).forEach(p=>h+=`<div class="li">${esc(p)}</div>`);
+    (m.followups||[]).forEach(f=>h+=`<div class="li" style="color:#FBBF24">확인: ${esc(f)}</div>`);
+    if(m.raw)h+=`<button class="rawbtn" data-raw="${m.id}" style="margin:6px 0 2px;font-size:12px;color:#8FD3FF;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:5px 11px;cursor:pointer">📄 원본 녹음 텍스트 보기</button><div class="rawtext" id="raw-${m.id}" style="display:none;white-space:pre-wrap;font-size:12.5px;color:#B9CCE6;background:#0A1120;border:1px solid rgba(56,189,248,.15);border-radius:8px;padding:10px;margin-top:6px;max-height:320px;overflow:auto">${esc(m.raw)}</div>`;
+    h+='</div>';
   });
   w.innerHTML=h;
   w.querySelectorAll('.del').forEach(x=>x.onclick=()=>{S.meetings=S.meetings.filter(m=>m.id!==x.dataset.id);save();renderMeet();badges()});
+  w.querySelectorAll('[data-editm]').forEach(x=>x.onclick=()=>editMeetForm(x.dataset.editm));
   w.querySelectorAll('[data-raw]').forEach(b=>b.onclick=()=>{const d=$('#raw-'+b.dataset.raw);if(!d)return;const show=d.style.display==='none';d.style.display=show?'block':'none';b.textContent=show?'📄 원본 닫기':'📄 원본 녹음 텍스트 보기'});
 }
+window.backFolders=()=>{meetFolder=null;renderMeet()};
+window.addFolderForm=()=>{openAdd(`<h3>새 폴더 만들기</h3><p style="color:var(--muted);font-size:13px">${CATLABEL[meetCat]} 안에 새 폴더(주제·상대)를 만들어요.</p>
+  <div class="fld"><label>폴더 이름</label><input id="axFolder" placeholder="예: 아펙스 투자건 / 백석호 이사"></div>
+  <button class="btn" onclick="saveFolder()">만들기</button><button class="btn ghost" onclick="closeAdd()">취소</button>`)};
+window.saveFolder=()=>{const nm=$('#axFolder').value.trim();if(!nm){toast('폴더 이름을 입력하세요');return}ensureFolders();if(!S.folders[meetCat].includes(nm))S.folders[meetCat].push(nm);save();closeAdd();meetFolder=nm;renderMeet();toast('폴더를 만들었어요')};
+window.editMeetForm=(mid)=>{const m=S.meetings.find(x=>x.id===mid);if(!m)return;
+  openAdd(`<h3>회의 내용 수정</h3>
+  <div class="fld"><label>폴더(상대/주제)</label><input id="emC"></div>
+  <div class="fld"><label>날짜</label><input type="date" id="emD"></div>
+  <div class="fld"><label>한 줄 요약</label><input id="emS"></div>
+  <div class="fld"><label>핵심 내용 (한 줄에 하나씩)</label><textarea id="emP" rows="8" style="width:100%;box-sizing:border-box;background:#0B1220;border:1px solid rgba(56,189,248,.25);border-radius:10px;color:#DCEEFF;padding:10px;font:inherit;resize:vertical"></textarea></div>
+  <div class="fld"><label>확인할 것 (한 줄에 하나씩)</label><textarea id="emF" rows="3" style="width:100%;box-sizing:border-box;background:#0B1220;border:1px solid rgba(56,189,248,.25);border-radius:10px;color:#DCEEFF;padding:10px;font:inherit;resize:vertical"></textarea></div>
+  <button class="btn" onclick="saveMeetEdit('${mid}')">저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`);
+  $('#emC').value=m.contact||'';$('#emD').value=m.date||'';$('#emS').value=m.summary||'';$('#emP').value=(m.points||[]).join('\n');$('#emF').value=(m.followups||[]).join('\n')};
+window.saveMeetEdit=(mid)=>{const m=S.meetings.find(x=>x.id===mid);if(!m)return;
+  m.contact=$('#emC').value.trim()||'기타';m.date=$('#emD').value||m.date;m.summary=$('#emS').value.trim();
+  m.points=$('#emP').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  m.followups=$('#emF').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  save();closeAdd();meetFolder=m.contact;renderMeet();badges();toast('수정했어요')};
 
 
 /* ---------- 메모 ---------- */
