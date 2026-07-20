@@ -278,10 +278,22 @@ const CATLABEL={internal:'내부회의',external:'외부회의',lecture:'강의�
 const SB_URL='https://whhmymjijieuqiqvjszh.supabase.co';
 const SB_KEY='sb_publishable_ekN8wEjTor413zTwy0YHVw_8e6eNUea';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
-let USER=null,cloudReady=false,saveTimer=null;
+let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=null,pollTimer=null,curView='chat';
 
-function save(){localStorage.setItem('jarvis_cache',JSON.stringify(S));if(cloudReady){clearTimeout(saveTimer);saveTimer=setTimeout(pushCloud,700)}}
-async function pushCloud(){if(!USER)return;try{await sb.from('jarvis_state').upsert({user_id:USER.id,data:S,updated_at:new Date().toISOString()})}catch(e){console.warn('cloud save',e)}}
+function save(){localStorage.setItem('jarvis_cache',JSON.stringify(S));if(cloudReady){pendingSave=true;clearTimeout(saveTimer);saveTimer=setTimeout(pushCloud,700)}}
+async function pushCloud(){if(!USER)return;const ts=new Date().toISOString();try{await sb.from('jarvis_state').upsert({user_id:USER.id,data:S,updated_at:ts});lastServerTs=ts}catch(e){console.warn('cloud save',e)}finally{pendingSave=false}}
+function rerenderCurrent(){renderChat();badges();if(curView==='cal')renderCal();else if(curView==='meet')renderMeet();else if(curView==='rec')renderRec();else if(curView==='memo')renderMemo();}
+async function pollCloud(){
+  if(!USER||!cloudReady||pendingSave||saveTimer)return;
+  try{const {data}=await sb.from('jarvis_state').select('updated_at').eq('user_id',USER.id).maybeSingle();
+    if(data&&data.updated_at&&data.updated_at!==lastServerTs){
+      const {data:full}=await sb.from('jarvis_state').select('data,updated_at').eq('user_id',USER.id).maybeSingle();
+      if(full&&full.data&&Object.keys(full.data).length){S=Object.assign(JSON.parse(JSON.stringify(DEF)),full.data);migrate();lastServerTs=full.updated_at;rerenderCurrent();}
+    }}catch(e){console.warn('poll',e)}
+}
+function startSync(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollCloud,6000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollCloud()});
+  window.addEventListener('focus',pollCloud);}
 function seedNew(){
   S.meetings=[{id:id(),cat:'lecture',contact:'IBK창공 대구 3기 OT',date:today(),
     summary:'혁신제품·NET 인증 조달 패스트트랙, 교육 시뮬레이터·유지보수 반복매출, 자금',
@@ -335,7 +347,7 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;if(v==='cal')renderCal();if(v==='meet')renderMeet();if(v==='rec')renderRec();if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet')renderMeet();if(v==='rec')renderRec();if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
@@ -605,6 +617,7 @@ async function afterLogin(){
   $('#mLogin').classList.remove('on');
   await loadCloud();
   renderChat();renderQuick();badges();
+  startSync();
   if(!S.settings.key)setTimeout(openSettings,500);
 }
 $('#loginBtn').onclick=async()=>{
