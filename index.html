@@ -152,7 +152,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v8</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v9</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -262,8 +262,10 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 @@ACTIONS@@[{...}]
 - {"type":"event","date":"YYYY-MM-DD","time":"HH:mm","title":"제목","note":"메모"}  (날짜 확정 일정/조사예정. 시간 없으면 time 생략)
 - {"type":"todo","title":"할일","due":"기한","owner":"담당"}  (날짜 미정 할일)
-- {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심"],"followups":["확인할것"]}
+- {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름 또는 회의명","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심내용을 여러 줄로 충분히"],"followups":["확인할것"]}
      · internal=직원 간 내부회의 · external=거래처·투자사 등 외부회의 · lecture=강의·컨설팅·교육
+     · points에는 회의 핵심 내용을 팀/주제별로 충분히 여러 줄 담아라(요약이 길면 10~20줄도 OK). 대화창에 보여준 정리 내용이 회의록 탭에도 그대로 남도록.
+     · ★대표님이 "회의록에 넣어줘 / 내부회의에 넣어줘" 등 저장을 명시하면, 답변이 아무리 길어도 반드시 맨 끝에 이 meeting 액션을 넣어라. cat은 지시한 분류(내부회의=internal)로. 절대 빠뜨리지 마라.
 - {"type":"memo","kind":"idea|diary","text":"내용"}  (idea=갑자기 떠오른 아이디어 · diary=창업일기·한풀이·감정)
 - {"type":"update","match":"기존 일정 제목 일부","note":"추가할 내용(연락처·장소·준비물 등)"}  (이미 등록된 일정/할일에 정보 덧붙이기. 새로 만들지 말 것. match는 기존 제목의 핵심 단어)
 회의/대화 내용을 받으면 적절한 cat으로 meeting 저장. 아이디어나 감정/한풀이는 memo로 저장. 날짜가 불확실하면 event를 만들지 말고 답변에서 "며칠에 넣을까요?"라고 물어보세요. 저장할 게 없으면 @@ACTIONS@@ 줄을 넣지 마세요.
@@ -429,7 +431,7 @@ async function callAI(userText,media){
       if(a.kind==='pdf')content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:m[2]}});
       else content.push({type:'image',source:{type:'base64',media_type:m[1],data:m[2]}});}
     content.push({type:'text',text:userText});
-    const body={model:st.model||'claude-sonnet-4-6',max_tokens:1600,system:sysPrompt(),messages:[...hist,{role:'user',content}]};
+    const body={model:st.model||'claude-sonnet-4-6',max_tokens:8000,system:sysPrompt(),messages:[...hist,{role:'user',content}]};
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':st.key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body)});
     const j=await r.json();if(!r.ok)throw new Error(j.error?.message||r.status);
     return j.content.map(b=>b.text||'').join('');
@@ -579,16 +581,23 @@ window.saveEvent2=()=>{const t=$('#axT').value.trim();if(!t){toast('내용을 �
 $('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
 function renderMeet(){
   const w=$('#meetList');const ms=S.meetings.filter(m=>m.cat===meetCat);
-  if(!ms.length){w.innerHTML=empty('🗂',CATLABEL[meetCat]+' 기록이 없어요.<br>대화로 회의 내용을 보내면 상대별로 쌓여요.');return}
-  const g={};ms.forEach(m=>{(g[m.contact||'기타']=g[m.contact||'기타']||[]).push(m)});
-  let h='';Object.keys(g).forEach(k=>{
-    h+=`<div class="card"><div class="cb"><div class="mt-contact">👤 ${esc(k)} <span class="chip b">${g[k].length}회</span></div>`;
-    g[k].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(m=>{
-      h+=`<div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)} <span class="del" data-id="${m.id}" style="float:right;color:#456;cursor:pointer">✕</span></div>`;
-      (m.points||[]).forEach(p=>h+=`<div class="li">${esc(p)}</div>`);
-      (m.followups||[]).forEach(f=>h+=`<div class="li" style="color:#FBBF24">확인: ${esc(f)}</div>`);
+  if(!ms.length){w.innerHTML=empty('🗂',CATLABEL[meetCat]+' 기록이 없어요.<br>대화로 회의 내용을 보내면 월별·상대별로 쌓여요.');return}
+  const byMonth={};ms.forEach(m=>{const mo=(m.date||'').slice(0,7)||'날짜미상';(byMonth[mo]=byMonth[mo]||[]).push(m)});
+  const months=Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));
+  let h='';
+  months.forEach(mo=>{
+    const label=mo==='날짜미상'?'날짜 미상':(mo.slice(0,4)+'년 '+Number(mo.slice(5,7))+'월');
+    h+=`<div class="month-h" style="display:flex;align-items:center;gap:8px;margin:14px 2px 8px;font-weight:800;color:#8FD3FF;font-size:14px;border-left:3px solid #38BDF8;padding-left:9px">🗓 ${label}<span style="font-weight:600;color:var(--muted);font-size:12px">${byMonth[mo].length}건</span></div>`;
+    const g={};byMonth[mo].forEach(m=>{(g[m.contact||'기타']=g[m.contact||'기타']||[]).push(m)});
+    Object.keys(g).forEach(k=>{
+      h+=`<div class="card"><div class="cb"><div class="mt-contact">👤 ${esc(k)} <span class="chip b">${g[k].length}회</span></div>`;
+      g[k].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(m=>{
+        h+=`<div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)} <span class="del" data-id="${m.id}" style="float:right;color:#456;cursor:pointer">✕</span></div>`;
+        (m.points||[]).forEach(p=>h+=`<div class="li">${esc(p)}</div>`);
+        (m.followups||[]).forEach(f=>h+=`<div class="li" style="color:#FBBF24">확인: ${esc(f)}</div>`);
+      });
+      h+='</div></div>';
     });
-    h+='</div></div>';
   });
   w.innerHTML=h;
   w.querySelectorAll('.del').forEach(x=>x.onclick=()=>{S.meetings=S.meetings.filter(m=>m.id!==x.dataset.id);save();renderMeet();badges()});
