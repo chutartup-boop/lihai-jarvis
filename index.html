@@ -152,7 +152,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v12</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v14</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -570,8 +570,18 @@ function dayPanel(){
   if(todos.length){h+='<div class="grp-h" style="margin-top:12px">🔖 날짜 미정 · 할 일</div>';todos.forEach(e=>h+=evRow(e,true))}
   return h;
 }
-function evRow(e,td){let tag='';if(td){const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);if(m&&m[1]<today())tag=' <span style="color:#F87171;font-size:11px;font-weight:700;background:rgba(248,113,113,.13);padding:1px 6px;border-radius:6px">지연</span>';}
-  return `<div class="ev" data-ev="${e.id}" style="cursor:pointer"><div class="when">${td?'✓':esc(e.time||'종일')}</div><div style="flex:1"><b>${esc(e.title)}${tag}</b>${e.note?`<span>${esc(e.note)}</span>`:''}</div><span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:6px;font-size:14px">✎</span><span class="del" data-id="${e.id}" title="삭제">✕</span></div>`}
+function evRow(e,td){let tag='';if(td&&!e.done){const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);if(m&&m[1]<today())tag=' <span style="color:#F87171;font-size:11px;font-weight:700;background:rgba(248,113,113,.13);padding:1px 6px;border-radius:6px">지연</span>';}
+  const strike=e.done?'text-decoration:line-through;opacity:.55':'';
+  const chk=e.done?'✅':'⬜';
+  const whenTxt=td?(e.done?'완료':'할일'):esc(e.time||'종일');
+  return `<div class="ev" data-ev="${e.id}" style="cursor:pointer;${e.done?'opacity:.75':''}">`+
+    `<span data-done="${e.id}" title="완료 표시" style="flex:none;cursor:pointer;font-size:17px;line-height:1;margin-top:1px">${chk}</span>`+
+    `<div class="when" style="width:46px;${strike}">${whenTxt}</div>`+
+    `<div style="flex:1"><b style="${strike}">${esc(e.title)}${tag}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
+    `<span data-push="${e.id}" title="내일로 넘기기" style="flex:none;color:#8FD3FF;cursor:pointer;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:7px;padding:3px 8px;margin-right:7px">내일로</span>`+
+    `<span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:7px;font-size:14px;cursor:pointer">✎</span>`+
+    `<span class="del" data-id="${e.id}" title="삭제" style="cursor:pointer">✕</span></div>`}
+function nextDay(d){const p=(d||today()).split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+1);return dstr(dt);}
 function bindCal(){
   const w=$('#calList');
   w.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const n=b.dataset.nav;if(n==='tw'||n==='tm'){calSel=today();renderCal();return}
@@ -579,7 +589,12 @@ function bindCal(){
   w.querySelectorAll('[data-d]').forEach(x=>x.onclick=()=>{calSel=x.dataset.d;renderCal()});
   w.querySelectorAll('.del').forEach(x=>x.onclick=ev=>{ev.stopPropagation();S.events=S.events.filter(e=>e.id!==x.dataset.id);save();renderCal();badges()});
   w.querySelectorAll('[data-edit]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();editEventForm(x.dataset.edit)});
-  w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]'))return;editEventForm(x.dataset.ev)});
+  w.querySelectorAll('[data-done]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.done);if(e){e.done=!e.done;save();renderCal();badges()}});
+  w.querySelectorAll('[data-push]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.push);if(!e)return;
+    if(e.date){e.date=nextDay(e.date);}
+    else{const m=(e.due||'').match(/(\d{4}-\d{2}-\d{2})/);const base=m?m[1]:today();const nd=nextDay(base);e.due=nd;e.note=(e.note||'').replace(/\d{4}-\d{2}-\d{2}/,nd);if(!/\d{4}-\d{2}-\d{2}/.test(e.note))e.note=(e.note?e.note+' · ':'')+nd;}
+    e.done=false;save();if(e.date)calSel=e.date;renderCal();badges();toast('내일로 넘겼어요')});
+  w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]')||ev.target.closest('[data-done]')||ev.target.closest('[data-push]'))return;editEventForm(x.dataset.ev)});
   const ad=w.querySelector('[data-add]');if(ad)ad.onclick=()=>addEventForm(calSel);
 }
 window.editEventForm=(eid)=>{const e=S.events.find(x=>x.id===eid);if(!e)return;
@@ -618,7 +633,7 @@ function renderMeet(){
   const w=$('#meetList');ensureFolders();
   if(meetFolder===null){ // 폴더 목록
     const folders=folderList(meetCat);
-    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 12px"><span style="color:var(--muted);font-size:13px">${CATLABEL[meetCat]} · 폴더 ${folders.length}개</span><button class="add" onclick="addFolderForm()">+ 새 폴더</button></div>`;
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px"><span style="color:var(--muted);font-size:13px">${CATLABEL[meetCat]} · 폴더 ${folders.length}개</span><button onclick="addFolderForm()" style="background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:10px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ 새 폴더</button></div>`;
     if(!folders.length){h+=empty('🗂',CATLABEL[meetCat]+' 폴더가 없어요.<br>대화로 회의·녹음을 정리하거나 "+ 새 폴더"로 만들어보세요.');}
     folders.forEach(f=>{
       h+=`<div class="card folder-item" data-folder="${encodeURIComponent(f.name)}" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -632,7 +647,9 @@ function renderMeet(){
   }
   // 폴더 히스토리
   const ms=S.meetings.filter(m=>m.cat===meetCat&&(m.contact||'기타')===meetFolder).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 2px 12px"><button class="add" onclick="backFolders()" style="background:rgba(56,189,248,.12)">← 폴더 목록</button><span style="font-weight:800;color:#8FD3FF">📁 ${esc(meetFolder)}</span></div>`;
+  let h=`<div style="display:flex;align-items:center;gap:12px;margin:4px 2px 16px;padding-bottom:11px;border-bottom:1px solid rgba(56,189,248,.18)">
+    <button onclick="backFolders()" style="flex:none;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:10px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">← 폴더 목록</button>
+    <span style="font-weight:800;color:#E5F2FF;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${esc(meetFolder)}</span></div>`;
   if(!ms.length){h+=empty('🗂','이 폴더는 아직 비어있어요.<br>대화에서 이 폴더로 회의·녹음을 정리해보세요.');}
   ms.forEach(m=>{
     h+=`<div class="card"><div class="mt-date">📅 ${esc(m.date)} — ${esc(m.summary)}<span style="float:right"><span data-editm="${m.id}" title="수정" style="opacity:.6;cursor:pointer;margin-right:8px">✎</span><span class="del" data-id="${m.id}" style="color:#456;cursor:pointer" title="삭제">✕</span></span></div>`;
