@@ -152,7 +152,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v14</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v15</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -162,6 +162,7 @@
   <div class="tabs" id="tabs">
     <div class="t on" data-v="chat"><span class="ic">💬</span>대화</div>
     <div class="t" data-v="cal"><span class="ic">📅</span>일정<span class="badge" id="bCal" style="display:none"></span></div>
+    <div class="t" data-v="todo"><span class="ic">✅</span>할일<span class="badge" id="bTodo" style="display:none"></span></div>
     <div class="t" data-v="meet"><span class="ic">🗂</span>회의록<span class="badge" id="bMeet" style="display:none"></span></div>
     <div class="t" data-v="memo"><span class="ic">📝</span>메모<span class="badge" id="bMemo" style="display:none"></span></div>
   </div>
@@ -184,6 +185,11 @@
     <div class="vhead"><h2>📅 일정</h2><button class="add" id="addEvent">+ 직접 추가</button></div>
     <div class="seg2" id="calMode"><button data-m="week" class="on">주간</button><button data-m="month">월간</button></div>
     <div id="calList"></div>
+  </div></section>
+
+  <section class="view" id="v-todo"><div class="vwrap">
+    <div class="vhead"><h2>✅ 할일</h2><button class="add" id="addTodo">+ 할일 추가</button></div>
+    <div id="todoList"></div>
   </div></section>
 
   <section class="view" id="v-meet"><div class="vwrap">
@@ -254,8 +260,9 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 - ★★기존 일정에 정보 추가 시 중복 금지: 대표님이 이미 등록된 일정과 관련된 추가 정보(담당자 연락처·장소·준비물·변경사항 등)를 말하면, 절대 새 event를 새로 만들지 마라. 기존 항목이 명확하면 update로 그 일정에 덧붙이고, 애매하면 "○○ 일정에 추가할까요?"라고 먼저 물어라. (예: "동국대 특강" 이미 있는데 "담당교수 연락처 010-..." 라고 하면 → 새 일정 X, 기존 동국대 특강에 update)
 [저장 규칙] 저장할 구체적 내용이 있으면 답변 맨 끝에 딱 한 줄(사용자에겐 안 보임):
 @@ACTIONS@@[{...}]
-- {"type":"event","date":"YYYY-MM-DD","time":"HH:mm","title":"제목","note":"메모"}  (날짜 확정 일정/조사예정. 시간 없으면 time 생략)
-- {"type":"todo","title":"할일","due":"기한","owner":"담당"}  (날짜 미정 할일)
+- {"type":"event","date":"YYYY-MM-DD","time":"HH:mm","title":"제목","note":"메모"}  (특정 날짜의 '일정'. 미팅·행사·전화·방문·마감 등 날짜가 정해졌거나 정할 수 있는 것은 전부 event)
+- {"type":"todo","title":"할일","owner":"담당"}  (날짜와 전혀 무관한 순수 '할 일'. 예: "언제든 견적서 검토하기")
+★★[일정 vs 할일 구분 — 매우 중요] 대표님이 "일정 등록해줘 / 미팅 잡아줘 / ○일에 ~하기"처럼 **날짜가 있거나 잡을 수 있는 건 무조건 event(일정)로 저장**하라. todo(할일)로 넣지 마라. 날짜가 애매하면 todo로 넣지 말고 "며칠로 잡을까요?"라고 먼저 물어라. todo는 정말 날짜 개념이 없는 반복·수시 할 일에만 쓴다. (대표님이 일정인 줄 알았는데 할일에 들어가 있으면 안 됨)
 - {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름 또는 회의명","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심내용을 여러 줄로 충분히"],"followups":["확인할것"]}
      · internal=직원 간 내부회의 · external=거래처·투자사 등 외부회의 · lecture=강의·컨설팅·교육
      · points에는 회의 핵심 내용을 팀/주제별로 충분히 여러 줄 담아라(요약이 길면 10~20줄도 OK). 대화창에 보여준 정리 내용이 회의록 탭에도 그대로 남도록.
@@ -282,13 +289,13 @@ const CATLABEL={internal:'내부회의',external:'외부회의',lecture:'강의�
 const SB_URL='https://whhmymjijieuqiqvjszh.supabase.co';
 const SB_KEY='sb_publishable_ekN8wEjTor413zTwy0YHVw_8e6eNUea';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
-let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=null,pollTimer=null,curView='chat';
+let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=null,pollTimer=null,curView='chat',sending=false;
 
 function save(){localStorage.setItem('jarvis_cache',JSON.stringify(S));if(cloudReady){pendingSave=true;clearTimeout(saveTimer);saveTimer=setTimeout(pushCloud,700)}}
-async function pushCloud(){if(!USER)return;const ts=new Date().toISOString();try{await sb.from('jarvis_state').upsert({user_id:USER.id,data:S,updated_at:ts});lastServerTs=ts}catch(e){console.warn('cloud save',e)}finally{pendingSave=false}}
-function rerenderCurrent(){renderChat();badges();if(curView==='cal')renderCal();else if(curView==='meet')renderMeet();else if(curView==='memo')renderMemo();}
+async function pushCloud(){if(!USER)return;saveTimer=null;const ts=new Date().toISOString();try{await sb.from('jarvis_state').upsert({user_id:USER.id,data:S,updated_at:ts});lastServerTs=ts}catch(e){console.warn('cloud save',e)}finally{pendingSave=false}}
+function rerenderCurrent(){renderChat();badges();if(curView==='cal')renderCal();else if(curView==='todo')renderTodo();else if(curView==='meet')renderMeet();else if(curView==='memo')renderMemo();}
 async function pollCloud(){
-  if(!USER||!cloudReady||pendingSave||saveTimer)return;
+  if(!USER||!cloudReady||pendingSave||saveTimer||sending)return;
   try{const {data}=await sb.from('jarvis_state').select('updated_at').eq('user_id',USER.id).maybeSingle();
     if(data&&data.updated_at&&data.updated_at!==lastServerTs){
       const {data:full}=await sb.from('jarvis_state').select('data,updated_at').eq('user_id',USER.id).maybeSingle();
@@ -342,7 +349,11 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 const WD=['일','월','화','수','목','금','토'];
 function dstr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function parseD(s){const p=(s||today()).split('-').map(Number);return new Date(p[0],p[1]-1,p[2])}
-let calSel=today(),calMode='week',meetCat='external',meetFolder=null,memoKind='idea';
+let calSel=today(),calMode='week',meetCat='external',meetFolder=null,memoKind='idea',todoWeek=null;
+function weekMon(ds){const p=(ds||today()).split('-').map(Number);const d=new Date(p[0],p[1]-1,p[2]);const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return dstr(d);}
+function thisMon(){return weekMon(today());}
+function weekLabel(mon){const p=mon.split('-').map(Number);const s=new Date(p[0],p[1]-1,p[2]);const e=new Date(p[0],p[1]-1,p[2]+6);const f=d=>(d.getMonth()+1)+'/'+d.getDate();return f(s)+'~'+f(e);}
+function rolloverTodos(){const tm=thisMon();(S.events||[]).forEach(e=>{if(e.todo){if(!e.week)e.week=tm;if(!e.done&&e.week<tm)e.week=tm;}});}
 function sysPrompt(){const n=new Date();return LIHAI+"\n\n[오늘] "+today()+" ("+WD[n.getDay()]+"요일). '내일','다음 주 화요일' 등은 이 날짜 기준으로 실제 YYYY-MM-DD를 계산하세요.";}
 function esc(s){return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 const $=s=>document.querySelector(s);
@@ -353,11 +364,11 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='todo'){todoWeek=thisMon();renderTodo();}if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
-  set('#bCal',S.events.length);set('#bMeet',S.meetings.length);
+  set('#bCal',S.events.filter(e=>!e.todo).length);set('#bTodo',S.events.filter(e=>e.todo&&!e.done&&e.week===thisMon()).length);set('#bMeet',S.meetings.length);
   set('#bMemo',(S.memos.idea.length+S.memos.diary.length));
 }
 
@@ -397,11 +408,24 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventD
 input.addEventListener('paste',e=>{const items=e.clipboardData&&e.clipboardData.items;if(!items)return;let got=false;for(const it of items){if(it.type&&it.type.startsWith('image/')){const f=it.getAsFile();if(f){got=true;addFile(f,'붙여넣은 이미지.png')}}}if(got){toast('🖼 이미지 첨부됨')}});
 $('#btnSend').onclick=send;
 
+function normImage(dataURL){return new Promise((resolve)=>{
+  try{const im=new Image();im.onload=()=>{try{
+    let w=im.naturalWidth||im.width,h=im.naturalHeight||im.height;const MAX=1568;
+    if(Math.max(w,h)>MAX){const r=MAX/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}
+    const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
+    resolve(c.toDataURL('image/jpeg',0.85));
+  }catch(e){resolve(dataURL)}};im.onerror=()=>resolve(dataURL);im.src=dataURL;}catch(e){resolve(dataURL)}
+});}
 async function send(){
+  if(sending)return;
   const text=input.value.trim();const atts=[...pendingAtt];
   if(!text&&!atts.length)return;
   if(!S.settings.key){openSettings();toast('먼저 API 키를 넣어주세요');return}
   input.value='';input.style.height='auto';pendingAtt=[];renderAtt();
+  sending=true;
+  // 이미지는 브라우저에서 표준 JPEG로 변환(형식 오류 방지 + 용량 축소)
+  for(const a of atts){if(a.kind==='image'){a.dataURL=await normImage(a.dataURL);}}
   const img=atts.find(a=>a.kind==='image');
   const media=atts.filter(a=>a.kind==='image'||a.kind==='pdf');
   const pdfNames=atts.filter(a=>a.kind==='pdf').map(a=>a.name);
@@ -425,6 +449,7 @@ async function send(){
     S.chat.push({role:'bot',text:clean||'(내용 없음)'});save();renderChat();
     if(actions.length)applyActions(actions);
   }catch(e){typing.remove();S.chat.push({role:'bot',text:'⚠️ 오류: '+e.message+'\n(설정에서 키·모델 확인)'});save();renderChat()}
+  finally{sending=false}
 }
 
 function historyForAPI(){return S.chat.filter(m=>m.role==='user'||m.role==='bot').slice(-20).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}))}
@@ -433,9 +458,10 @@ async function callAI(userText,media){
   const arr=!media?[]:Array.isArray(media)?media:[media];
   if(st.provider==='anthropic'){
     const content=[];
+    const okImg=['image/jpeg','image/png','image/gif','image/webp'];
     for(const a of arr){const m=(a.dataURL||'').match(/^data:(.*?);base64,(.*)$/);if(!m)continue;
       if(a.kind==='pdf')content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:m[2]}});
-      else content.push({type:'image',source:{type:'base64',media_type:m[1],data:m[2]}});}
+      else{let mt=(m[1]||'').toLowerCase();if(!okImg.includes(mt))mt='image/jpeg';content.push({type:'image',source:{type:'base64',media_type:mt,data:m[2]}});}}
     content.push({type:'text',text:userText});
     const body={model:st.model||'claude-sonnet-4-6',max_tokens:8000,system:sysPrompt(),messages:[...hist,{role:'user',content}]};
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':st.key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body)});
@@ -508,8 +534,8 @@ function applyActions(actions){
       if(S.events.some(e=>!e.todo&&e.date===(a.date||'')&&norm(e.title)===norm(a.title)))return;
       S.events.push({id:id(),date:a.date||'',time:a.time||'',title:a.title,note:a.note||'',src:'ai'});names.push('📅 일정: '+(a.date||'')+' '+a.title)}
     else if(a.type==='todo'){
-      if(S.events.some(e=>e.todo&&norm(e.title)===norm(a.title)))return;
-      S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,due:a.due||''});names.push('✅ 할일: '+a.title)}
+      if(S.events.some(e=>e.todo&&!e.done&&norm(e.title)===norm(a.title)))return;
+      S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,done:false,week:thisMon(),due:a.due||''});names.push('✅ 할일: '+a.title)}
     else if(a.type==='meeting'){const cat=['internal','external','lecture'].includes(a.cat)?a.cat:'external';
       if(S.meetings.some(m=>m.date===(a.date||today())&&norm(m.contact)===norm(a.contact)&&norm(m.summary)===norm(a.summary)))return;
       const raw=a.raw||S._pendingRaw||'';
@@ -562,23 +588,19 @@ function monthGrid(){
 function dayPanel(){
   const de=parseD(calSel);
   let h=`<div class="dayhead">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})<button class="addday" data-add="1">+ 일정 추가</button></div>`;
-  const evs=S.events.filter(e=>e.date===calSel).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const evs=S.events.filter(e=>e.date===calSel&&!e.todo).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   if(!evs.length)h+='<div class="empty" style="padding:22px 10px">이 날 일정이 없어요.</div>';
   else evs.forEach(e=>h+=evRow(e));
-  const dueOf=e=>{const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);return m?m[1]:'';};
-  const todos=S.events.filter(e=>!e.date).sort((a,b)=>(dueOf(a)||'9999').localeCompare(dueOf(b)||'9999'));
-  if(todos.length){h+='<div class="grp-h" style="margin-top:12px">🔖 날짜 미정 · 할 일</div>';todos.forEach(e=>h+=evRow(e,true))}
   return h;
 }
-function evRow(e,td){let tag='';if(td&&!e.done){const m=(e.due||e.note||'').match(/(\d{4}-\d{2}-\d{2})/);if(m&&m[1]<today())tag=' <span style="color:#F87171;font-size:11px;font-weight:700;background:rgba(248,113,113,.13);padding:1px 6px;border-radius:6px">지연</span>';}
+function evRow(e){
   const strike=e.done?'text-decoration:line-through;opacity:.55':'';
   const chk=e.done?'✅':'⬜';
-  const whenTxt=td?(e.done?'완료':'할일'):esc(e.time||'종일');
   return `<div class="ev" data-ev="${e.id}" style="cursor:pointer;${e.done?'opacity:.75':''}">`+
     `<span data-done="${e.id}" title="완료 표시" style="flex:none;cursor:pointer;font-size:17px;line-height:1;margin-top:1px">${chk}</span>`+
-    `<div class="when" style="width:46px;${strike}">${whenTxt}</div>`+
-    `<div style="flex:1"><b style="${strike}">${esc(e.title)}${tag}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
-    `<span data-push="${e.id}" title="내일로 넘기기" style="flex:none;color:#8FD3FF;cursor:pointer;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:7px;padding:3px 8px;margin-right:7px">내일로</span>`+
+    `<div class="when" style="width:46px;${strike}">${esc(e.time||'종일')}</div>`+
+    `<div style="flex:1"><b style="${strike}">${esc(e.title)}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
+    `<label title="날짜 변경" style="flex:none;position:relative;overflow:hidden;color:#8FD3FF;cursor:pointer;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:7px;padding:3px 8px;margin-right:7px">📅 이동<input type="date" data-move="${e.id}" value="${e.date||''}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`+
     `<span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:7px;font-size:14px;cursor:pointer">✎</span>`+
     `<span class="del" data-id="${e.id}" title="삭제" style="cursor:pointer">✕</span></div>`}
 function nextDay(d){const p=(d||today()).split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+1);return dstr(dt);}
@@ -590,11 +612,8 @@ function bindCal(){
   w.querySelectorAll('.del').forEach(x=>x.onclick=ev=>{ev.stopPropagation();S.events=S.events.filter(e=>e.id!==x.dataset.id);save();renderCal();badges()});
   w.querySelectorAll('[data-edit]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();editEventForm(x.dataset.edit)});
   w.querySelectorAll('[data-done]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.done);if(e){e.done=!e.done;save();renderCal();badges()}});
-  w.querySelectorAll('[data-push]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.push);if(!e)return;
-    if(e.date){e.date=nextDay(e.date);}
-    else{const m=(e.due||'').match(/(\d{4}-\d{2}-\d{2})/);const base=m?m[1]:today();const nd=nextDay(base);e.due=nd;e.note=(e.note||'').replace(/\d{4}-\d{2}-\d{2}/,nd);if(!/\d{4}-\d{2}-\d{2}/.test(e.note))e.note=(e.note?e.note+' · ':'')+nd;}
-    e.done=false;save();if(e.date)calSel=e.date;renderCal();badges();toast('내일로 넘겼어요')});
-  w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]')||ev.target.closest('[data-done]')||ev.target.closest('[data-push]'))return;editEventForm(x.dataset.ev)});
+  w.querySelectorAll('[data-move]').forEach(x=>{x.onclick=ev=>ev.stopPropagation();x.onchange=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.move);if(!e||!x.value)return;e.date=x.value;e.done=false;save();calSel=x.value;renderCal();badges();toast('날짜를 옮겼어요')}});
+  w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]')||ev.target.closest('[data-done]')||ev.target.closest('label'))return;editEventForm(x.dataset.ev)});
   const ad=w.querySelector('[data-add]');if(ad)ad.onclick=()=>addEventForm(calSel);
 }
 window.editEventForm=(eid)=>{const e=S.events.find(x=>x.id===eid);if(!e)return;
@@ -620,6 +639,45 @@ function addEventForm(date){openAdd(`<h3>일정 추가</h3>
   <button class="btn" onclick="saveEvent2()">저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`)}
 $('#addEvent').onclick=()=>addEventForm(calSel);
 window.saveEvent2=()=>{const t=$('#axT').value.trim();if(!t){toast('내용을 입력하세요');return}const d=$('#axD').value||today();S.events.push({id:id(),date:d,time:$('#axTime').value,title:t,note:$('#axN').value,src:'manual'});save();closeAdd();calSel=d;renderCal();badges()};
+
+/* ---------- 할일 (주간, 미완료는 다음 주로 이월) ---------- */
+function renderTodo(){
+  const w=$('#todoList');if(!todoWeek)todoWeek=thisMon();rolloverTodos();
+  const isThis=todoWeek===thisMon();
+  const items=S.events.filter(e=>e.todo&&(e.week||thisMon())===todoWeek);
+  const undone=items.filter(e=>!e.done),done=items.filter(e=>e.done);
+  const navBtn='flex:none;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.35);color:#BAE6FD;border-radius:9px;padding:6px 13px;font-size:15px;font-weight:800;cursor:pointer';
+  let h=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 2px 14px">
+    <button onclick="todoNav(-1)" style="${navBtn}">‹</button>
+    <div style="text-align:center"><div style="font-weight:800;color:#E5F2FF;font-size:15px">${isThis?'이번 주':'지난/다음 주'} · ${weekLabel(todoWeek)}</div><div style="font-size:11px;color:var(--muted)">미완료 ${undone.length} · 완료 ${done.length}</div></div>
+    <button onclick="todoNav(1)" style="${navBtn}">›</button></div>`;
+  if(!isThis)h+=`<div style="text-align:center;margin-bottom:12px"><button onclick="todoThis()" style="background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:9px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">이번 주로</button></div>`;
+  if(!items.length)h+=empty('✅','이 주의 할 일이 없어요.<br>대화로 "할일 추가해줘" 하거나 위 + 할일 추가를 눌러보세요.');
+  undone.forEach(e=>h+=todoRow(e));
+  if(done.length){h+='<div class="grp-h" style="margin-top:16px;color:var(--muted)">✔ 완료 '+done.length+'개</div>';done.forEach(e=>h+=todoRow(e));}
+  w.innerHTML=h;
+  w.querySelectorAll('[data-tdone]').forEach(x=>x.onclick=()=>{const e=S.events.find(o=>o.id===x.dataset.tdone);if(e){e.done=!e.done;save();renderTodo();badges()}});
+  w.querySelectorAll('[data-tdel]').forEach(x=>x.onclick=()=>{S.events=S.events.filter(o=>o.id!==x.dataset.tdel);save();renderTodo();badges()});
+  w.querySelectorAll('[data-tedit]').forEach(x=>x.onclick=()=>editTodoForm(x.dataset.tedit));
+}
+function todoRow(e){const strike=e.done?'text-decoration:line-through;opacity:.55':'';const chk=e.done?'✅':'⬜';
+  return `<div class="ev" style="align-items:center;${e.done?'opacity:.8':''}">`+
+    `<span data-tdone="${e.id}" title="완료" style="flex:none;cursor:pointer;font-size:18px;line-height:1">${chk}</span>`+
+    `<div style="flex:1"><b style="${strike}">${esc(e.title)}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
+    `<span data-tedit="${e.id}" title="수정" style="opacity:.55;margin-right:8px;font-size:14px;cursor:pointer">✎</span>`+
+    `<span data-tdel="${e.id}" title="삭제" style="color:#456;cursor:pointer">✕</span></div>`}
+window.todoNav=(d)=>{const p=todoWeek.split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+7*d);todoWeek=dstr(dt);renderTodo()};
+window.todoThis=()=>{todoWeek=thisMon();renderTodo()};
+$('#addTodo').onclick=()=>{openAdd(`<h3>할일 추가</h3>
+  <div class="fld"><label>할 일</label><input id="atT" placeholder="예: 견적서 검토"></div>
+  <div class="fld"><label>메모 (선택)</label><input id="atN"></div>
+  <button class="btn" onclick="saveTodo()">추가</button><button class="btn ghost" onclick="closeAdd()">취소</button>`)};
+window.saveTodo=()=>{const t=$('#atT').value.trim();if(!t){toast('할 일을 입력하세요');return}S.events.push({id:id(),date:'',time:'',title:t,note:$('#atN').value.trim(),todo:true,done:false,week:thisMon(),src:'manual'});save();closeAdd();todoWeek=thisMon();renderTodo();badges()};
+window.editTodoForm=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;openAdd(`<h3>할일 수정</h3>
+  <div class="fld"><label>할 일</label><input id="etT"></div>
+  <div class="fld"><label>메모</label><input id="etN"></div>
+  <button class="btn" onclick="saveTodoEdit('${tid}')">저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`);$('#etT').value=e.title||'';$('#etN').value=e.note||''};
+window.saveTodoEdit=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;const t=$('#etT').value.trim();if(!t){toast('할 일을 입력하세요');return}e.title=t;e.note=$('#etN').value.trim();save();closeAdd();renderTodo();badges();toast('수정했어요')};
 
 /* ---------- 회의록 (2단계: 폴더 목록 → 폴더 히스토리) ---------- */
 $('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;meetFolder=null;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
@@ -723,6 +781,7 @@ async function boot(){
 async function afterLogin(){
   $('#mLogin').classList.remove('on');
   await loadCloud();
+  rolloverTodos();
   renderChat();renderQuick();badges();
   startSync();
   if(!S.settings.key)setTimeout(openSettings,500);
