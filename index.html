@@ -92,7 +92,7 @@
   .ev b{font-size:13.5px;font-weight:700;display:block;color:var(--ink)}
   .ev span{font-size:12px;color:var(--muted)}
   .ev .del{margin-left:auto;color:#456;cursor:pointer;font-size:14px}
-  body.readonly .composer,body.readonly .quick,body.readonly .add,body.readonly .del,body.readonly .movebtn,body.readonly #btnBackup,body.readonly .t[data-v="chat"],body.readonly [data-edit],body.readonly [data-editm],body.readonly [data-done],body.readonly [data-tdone],body.readonly [data-tedit],body.readonly [data-tdel],body.readonly [data-delfolder],body.readonly #addTodo{display:none!important}
+  body.readonly .composer,body.readonly .quick,body.readonly .add,body.readonly .del,body.readonly .movebtn,body.readonly #btnBackup,body.readonly .t[data-v="chat"],body.readonly .t[data-v="memo"],body.readonly [data-edit],body.readonly [data-editm],body.readonly [data-done],body.readonly [data-tdone],body.readonly [data-tedit],body.readonly [data-tdel],body.readonly [data-delfolder],body.readonly #addTodo{display:none!important}
   .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:7px;display:inline-block}
   .chip.b{background:rgba(56,189,248,.14);color:#7DD3FC}
   .li{font-size:13px;color:#C6D6EC;padding:3px 0 3px 14px;position:relative}
@@ -153,7 +153,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v16</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v17</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -303,7 +303,7 @@ async function pollCloud(){
   try{const {data}=await stateQuery('updated_at');
     if(data&&data.updated_at&&data.updated_at!==lastServerTs){
       const {data:full}=await stateQuery('data,updated_at');
-      if(full&&full.data&&Object.keys(full.data).length){S=Object.assign(JSON.parse(JSON.stringify(DEF)),full.data);migrate();lastServerTs=full.updated_at;rerenderCurrent();}
+      if(full&&full.data&&Object.keys(full.data).length){S=Object.assign(JSON.parse(JSON.stringify(DEF)),full.data);migrate();if(READONLY)sanitizeViewer();lastServerTs=full.updated_at;rerenderCurrent();}
     }}catch(e){console.warn('poll',e)}
 }
 function startSync(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollCloud,6000);
@@ -316,12 +316,16 @@ function seedNew(){
     followups:['소방 고중량 드론 TRL 단계 확인','한국임업진흥원 NET 핏 문의','A2G캐피탈 투자 메일']}];
   S.chat=[{role:'bot',text:'온라인. 시스템 정상입니다, 대표님. ⚡\n무엇을 도와드릴까요?\n\n예) "내일 3시 백석호 이사 미팅 잡아줘" · "오늘 직원회의 내용 정리할게" · "아이디어 하나 메모할게" · 강의·컨설팅 내용 붙여넣기'}];
 }
+function sanitizeViewer(){ // 임원(읽기전용)에게는 개인 대화·메모를 넘기지 않음
+  S.chat=[{role:'bot',text:'👁 읽기 전용 모드입니다.\n대표님의 일정·할일·회의록을 확인하실 수 있어요.'}];
+  S.memos={idea:[],diary:[]};
+}
 async function loadCloud(){
   cloudReady=false;let row=null;
   try{const {data}=await stateQuery('data,updated_at');row=data;if(row&&row.updated_at)lastServerTs=row.updated_at;}catch(e){console.warn('cloud load',e)}
   if(row&&row.data&&Object.keys(row.data).length){S=Object.assign(JSON.parse(JSON.stringify(DEF)),row.data)}
   else{S=JSON.parse(JSON.stringify(DEF));if(!READONLY)seedNew();}
-  migrate();dedupState();cloudReady=true;if(!READONLY)await pushCloud();
+  migrate();dedupState();if(READONLY)sanitizeViewer();cloudReady=true;if(!READONLY)await pushCloud();
 }
 function dedupState(){
   const nz=s=>(s||'').replace(/\s+/g,'').toLowerCase();
