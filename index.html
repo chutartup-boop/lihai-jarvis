@@ -153,7 +153,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v17</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v18</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -417,13 +417,26 @@ input.addEventListener('paste',e=>{const items=e.clipboardData&&e.clipboardData.
 $('#btnSend').onclick=send;
 
 function normImage(dataURL){return new Promise((resolve)=>{
-  try{const im=new Image();im.onload=()=>{try{
-    let w=im.naturalWidth||im.width,h=im.naturalHeight||im.height;const MAX=1568;
-    if(Math.max(w,h)>MAX){const r=MAX/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}
-    const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
-    resolve(c.toDataURL('image/jpeg',0.85));
-  }catch(e){resolve(dataURL)}};im.onerror=()=>resolve(dataURL);im.src=dataURL;}catch(e){resolve(dataURL)}
+  try{
+    const okImg=['image/jpeg','image/png','image/gif','image/webp'];
+    const mm=(dataURL||'').match(/^data:([^;]*);base64,/);
+    // 폰 캡처 등에서 형식표시가 비었거나 이상하면 image/png로 바꿔서 로드 가능하게
+    let src=dataURL;
+    if(!mm||!okImg.includes((mm[1]||'').toLowerCase())){src=(dataURL||'').replace(/^data:[^;]*;base64,/,'data:image/png;base64,');}
+    let done=false;const finish=v=>{if(!done){done=true;resolve(v)}};
+    setTimeout(()=>finish(src),6000); // 멈춤 방지 타임아웃
+    const im=new Image();
+    im.onload=()=>{try{
+      let w=im.naturalWidth||im.width,h=im.naturalHeight||im.height;const MAX=1400;
+      if(!w||!h){finish(src);return}
+      if(Math.max(w,h)>MAX){const r=MAX/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}
+      const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(im,0,0,w,h);
+      finish(c.toDataURL('image/jpeg',0.85));
+    }catch(e){finish(src)}};
+    im.onerror=()=>finish(src);
+    im.src=src;
+  }catch(e){resolve(dataURL)}
 });}
 async function send(){
   if(sending)return;
