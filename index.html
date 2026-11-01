@@ -177,7 +177,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v22</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v23</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -835,12 +835,14 @@ async function renderTeam(force){
   if(!teamDate)teamDate=today();
   if(teamBusy&&!force)return;teamBusy=true;
   const de=parseD(teamDate);
-  const head=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 2px 14px">
+  const hd=(sub)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 2px 10px">
     ${teamNavBtn('‹','teamNav(-1)')}
-    <div style="text-align:center"><div style="font-weight:800;color:#E5F2FF;font-size:15px">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})${teamDate===today()?' · 오늘':''}</div><div id="teamSub" style="font-size:11px;color:var(--muted)">불러오는 중…</div></div>
+    <div style="text-align:center"><div style="font-weight:800;color:#E5F2FF;font-size:15px">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})${teamDate===today()?' · 오늘':''}</div><div id="teamSub" style="font-size:11px;color:var(--muted)">${sub}</div></div>
     ${teamNavBtn('›','teamNav(1)')}</div>
-    <div style="text-align:center;margin-bottom:12px">${teamDate===today()?'':'<button onclick="teamToday()" style="background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:9px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">오늘로</button>'}</div>`;
-  w.innerHTML=head+'<div class="empty" style="padding:26px 10px">📡 직원 업무일지를 불러오는 중…</div>';
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px">
+      <label class="movebtn" style="position:relative;overflow:hidden;color:#8FD3FF;cursor:pointer;font-size:12px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:5px 11px">📅 날짜 선택<input type="date" value="${teamDate}" onchange="teamJump(this.value)" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+      ${teamDate===today()?'':'<button onclick="teamToday()" style="background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">오늘로</button>'}</div>`;
+  w.innerHTML=hd('불러오는 중…')+'<div class="empty" style="padding:26px 10px">📡 직원 업무일지를 불러오는 중…</div>';
   let j=null,err=null;
   try{
     const r=await fetch(TEAM_FN+'?key='+encodeURIComponent(TEAM_TOKEN)+'&date='+teamDate,{headers:{apikey:SB_KEY}});
@@ -848,12 +850,12 @@ async function renderTeam(force){
   }catch(e){err=String(e)}
   teamBusy=false;
   if(err){
-    w.innerHTML=head+`<div class="empty" style="padding:22px 12px;line-height:1.7">직원 업무일지를 아직 불러올 수 없어요.<br><span style="color:var(--muted);font-size:12px">team-brief 함수 배포·토큰 설정이 끝나면 여기에 표시돼요.<br>(${esc(err)})</span></div>`;
+    w.innerHTML=hd('불러오기 실패')+`<div class="empty" style="padding:22px 12px;line-height:1.7">직원 업무일지를 아직 불러올 수 없어요.<br><span style="color:var(--muted);font-size:12px">team-brief 함수 배포·토큰 설정이 끝나면 여기에 표시돼요.<br>(${esc(err)})</span></div>`;
     bindTeam();return;
   }
   const logs=j.logs||[],ns=j.notSubmitted||[];
-  const sub=$('#teamSub');if(sub)sub.textContent='제출 '+logs.length+' · 미제출 '+ns.length+' / 총 '+((j.counts&&j.counts.employees)||(logs.length+ns.length));
-  let h=head;
+  const subTxt='제출 '+logs.length+' · 미제출 '+ns.length+' / 총 '+((j.counts&&j.counts.employees)||(logs.length+ns.length));
+  let h=hd(subTxt);
   if(!logs.length&&!ns.length){h+=empty('👥','이 날 등록된 직원 일지가 없어요.');w.innerHTML=h;bindTeam();return;}
   // 부서별 그룹
   const depts=[];logs.forEach(p=>{if(!depts.includes(p.dept))depts.push(p.dept);});
@@ -885,6 +887,7 @@ function teamCard(p){
 }
 window.teamNav=(d)=>{const p=teamDate.split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+d);teamDate=dstr(dt);renderTeam(true)};
 window.teamToday=()=>{teamDate=today();renderTeam(true)};
+window.teamJump=(v)=>{if(v){teamDate=v;renderTeam(true)}};
 function bindTeam(){const b=$('#teamReload');if(b)b.onclick=()=>renderTeam(true);}
 
 /* ---------- 회의록 (2단계: 폴더 목록 → 폴더 히스토리) ---------- */
