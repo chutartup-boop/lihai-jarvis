@@ -177,7 +177,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v20</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v21</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -285,11 +285,12 @@ const LIHAI = `당신은 주식회사 리하이(LIHAI) 대표이사 추혜성 �
 - ★★기존 일정에 정보 추가 시 중복 금지: 대표님이 이미 등록된 일정과 관련된 추가 정보(담당자 연락처·장소·준비물·변경사항 등)를 말하면, 절대 새 event를 새로 만들지 마라. 기존 항목이 명확하면 update로 그 일정에 덧붙이고, 애매하면 "○○ 일정에 추가할까요?"라고 먼저 물어라. (예: "동국대 특강" 이미 있는데 "담당교수 연락처 010-..." 라고 하면 → 새 일정 X, 기존 동국대 특강에 update)
 [저장 규칙] 저장할 구체적 내용이 있으면 답변 맨 끝에 딱 한 줄(사용자에겐 안 보임):
 @@ACTIONS@@[{...}]
-- {"type":"event","date":"YYYY-MM-DD","end":"YYYY-MM-DD","time":"HH:mm","title":"제목","etype":"미팅|행사|발표|기타","place":"장소","attendees":"참석자","note":"메모"}  (특정 날짜의 '일정'. 미팅·행사·전화·방문·마감 등 날짜가 정해졌거나 정할 수 있는 것은 전부 event)
+- {"type":"event","date":"YYYY-MM-DD","end":"YYYY-MM-DD","time":"HH:mm","title":"제목","etype":"미팅|출장|행사|발표|기타","place":"장소","attendees":"참석자","note":"메모","secret":false}  (특정 날짜의 '일정'. 미팅·출장·행사·전화·방문·마감 등 날짜가 정해졌거나 정할 수 있는 것은 전부 event)
      · 여러 날 걸치는 일정(예: "28~29일 전시회")은 date=시작일, end=종료일. 하루면 end 생략.
-     · etype: 상대와 만나는 회의·미팅이면 "미팅", 전시회·행사·드론쇼면 "행사", 발표·강연이면 "발표", 그 외 "기타". 장소·참석자를 말하면 place·attendees에 채워라.
+     · etype: 상대와 만나는 회의·미팅이면 "미팅", 외부 출장·지방/해외 방문·현장 방문이면 "출장", 전시회·행사·드론쇼면 "행사", 발표·강연이면 "발표", 그 외 "기타". 장소·참석자를 말하면 place·attendees에 채워라.
      · ★etype가 "미팅"이면 앱이 자동으로 회의록에 그 제목의 폴더·페이지를 만들어 주니(대표님이 나중에 회의내용 채움), 미팅 일정은 반드시 etype:"미팅"으로.
-- {"type":"todo","title":"할일","owner":"담당"}  (날짜와 전혀 무관한 순수 '할 일'. 예: "언제든 견적서 검토하기")
+     · secret: 대표님이 "대외비/비공개/보안/임직원에게 공유하지 마"처럼 말하면 true. (true면 임직원 공유 화면·조간 메일에서 자동 제외됨). 평소엔 넣지 말거나 false.
+- {"type":"todo","title":"할일","owner":"담당","secret":false}  (날짜와 전혀 무관한 순수 '할 일'. 예: "언제든 견적서 검토하기". 대외비면 secret:true)
 ★★[일정 vs 할일 구분 — 매우 중요] 대표님이 "일정 등록해줘 / 미팅 잡아줘 / ○일에 ~하기"처럼 **날짜가 있거나 잡을 수 있는 건 무조건 event(일정)로 저장**하라. todo(할일)로 넣지 마라. 날짜가 애매하면 todo로 넣지 말고 "며칠로 잡을까요?"라고 먼저 물어라. todo는 정말 날짜 개념이 없는 반복·수시 할 일에만 쓴다. (대표님이 일정인 줄 알았는데 할일에 들어가 있으면 안 됨)
 - {"type":"meeting","cat":"internal|external|lecture","contact":"상대이름 또는 회의명","date":"YYYY-MM-DD","summary":"한줄요약","points":["핵심내용을 여러 줄로 충분히"],"followups":["확인할것"]}
      · internal=직원 간 내부회의 · external=거래처·투자사 등 외부회의 · lecture=강의·컨설팅·교육
@@ -347,9 +348,10 @@ function seedNew(){
     followups:['소방 고중량 드론 TRL 단계 확인','한국임업진흥원 NET 핏 문의','A2G캐피탈 투자 메일']}];
   S.chat=[{role:'bot',text:'온라인. 시스템 정상입니다, 대표님. ⚡\n무엇을 도와드릴까요?\n\n예) "내일 3시 백석호 이사 미팅 잡아줘" · "오늘 직원회의 내용 정리할게" · "아이디어 하나 메모할게" · 강의·컨설팅 내용 붙여넣기'}];
 }
-function sanitizeViewer(){ // 임원(읽기전용)에게는 개인 대화·메모를 넘기지 않음
+function sanitizeViewer(){ // 임원(읽기전용)에게는 개인 대화·메모·대외비 일정을 넘기지 않음
   S.chat=[{role:'bot',text:'👁 읽기 전용 모드입니다.\n대표님의 일정·할일·회의록을 확인하실 수 있어요.'}];
   S.memos={idea:[],diary:[]};
+  S.events=(S.events||[]).filter(e=>!e.secret); // 🔒 대외비 항목은 공유 대상에서 제외
 }
 async function loadCloud(){
   cloudReady=false;let row=null;
@@ -608,13 +610,13 @@ function applyActions(actions){
   actions.forEach(a=>{
     if(a.type==='event'){
       if(S.events.some(e=>!e.todo&&e.date===(a.date||'')&&norm(e.title)===norm(a.title)))return;
-      const ev={id:id(),date:a.date||'',end:a.end||'',time:a.time||'',title:a.title,note:a.note||'',place:a.place||'',attendees:a.attendees||'',etype:a.etype||'',src:'ai'};
+      const ev={id:id(),date:a.date||'',end:a.end||'',time:a.time||'',title:a.title,note:a.note||'',place:a.place||'',attendees:a.attendees||'',etype:a.etype||'',secret:!!a.secret,src:'ai'};
       S.events.push(ev);
       if(ev.etype==='미팅'&&ev.date)ensureMeetingForEvent(ev);
       names.push('📅 일정: '+(a.date||'')+(a.end&&a.end!==a.date?('~'+a.end):'')+' '+a.title)}
     else if(a.type==='todo'){
       if(S.events.some(e=>e.todo&&!e.done&&norm(e.title)===norm(a.title)))return;
-      S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,done:false,week:thisMon(),due:a.due||''});names.push('✅ 할일: '+a.title)}
+      S.events.push({id:id(),date:'',time:'',title:a.title,note:(a.owner?('담당 '+a.owner):'')+(a.due?(' · '+a.due):''),src:'ai',todo:true,done:false,week:thisMon(),due:a.due||'',secret:!!a.secret});names.push('✅ 할일: '+a.title)}
     else if(a.type==='meeting'){const cat=['internal','external','lecture'].includes(a.cat)?a.cat:'external';
       if(S.meetings.some(m=>m.date===(a.date||today())&&norm(m.contact)===norm(a.contact)&&norm(m.summary)===norm(a.summary)))return;
       const raw=a.raw||S._pendingRaw||'';
@@ -648,7 +650,7 @@ function applyActions(actions){
 $('#calMode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;calMode=b.dataset.m;document.querySelectorAll('#calMode button').forEach(x=>x.classList.toggle('on',x===b));renderCal()});
 function renderCal(){$('#calList').innerHTML=(calMode==='week'?weekStrip():monthGrid())+dayPanel();bindCal()}
 function evOn(e,ds){if(!e||e.todo)return false;const s=e.date;if(!s)return false;const en=e.end||s;return s<=ds&&ds<=en;}
-const ETYPES=['미팅','행사','발표','기타'];
+const ETYPES=['미팅','출장','행사','발표','기타'];
 function ensureMeetingForEvent(e){
   if(!e||e.etype!=='미팅'||!e.date)return;
   const contact=(e.title||'').trim()||'미팅';
@@ -673,25 +675,45 @@ function monthGrid(){
     h+=`<div class="${c}" data-d="${ds}">${d.getDate()}${cnt?`<span class="mdot"></span><span class="cnt">${cnt}건</span>`:''}</div>`}
   return h+'</div>';
 }
+function grpHead(icon,label,cnt,extra){
+  return `<div style="display:flex;align-items:center;gap:7px;margin:16px 2px 7px;font-size:12px;font-weight:800;color:#8FD3FF;letter-spacing:.3px">${icon} ${label}<span style="background:rgba(56,189,248,.16);color:#BAE6FD;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800">${cnt}</span>${extra||''}</div>`;
+}
 function dayPanel(){
   const de=parseD(calSel);
-  let h=`<div class="dayhead">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})<button class="addday" data-add="1">+ 일정 추가</button></div>`;
+  const isToday=calSel===today();
+  let h=`<div class="dayhead">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})${isToday?' <span style="font-size:11px;color:#38BDF8;font-weight:800">· 오늘</span>':''}<button class="addday" data-add="1">+ 일정 추가</button></div>`;
   const evs=S.events.filter(e=>evOn(e,calSel)).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-  if(!evs.length)h+='<div class="empty" style="padding:22px 10px">이 날 일정이 없어요.</div>';
-  else evs.forEach(e=>h+=evRow(e));
+  // 유형별로 체계적으로 묶기: 미팅 → 출장 → 그 외 일정
+  const groups=[
+    {icon:'🤝',label:'미팅',pick:e=>e.etype==='미팅'},
+    {icon:'✈️',label:'출장',pick:e=>e.etype==='출장'},
+    {icon:'📌',label:'행사·발표·기타',pick:e=>e.etype!=='미팅'&&e.etype!=='출장'},
+  ];
+  let shown=0;
+  groups.forEach(g=>{const list=evs.filter(g.pick);if(!list.length)return;shown+=list.length;h+=grpHead(g.icon,g.label,list.length);list.forEach(e=>h+=evRow(e));});
+  if(!shown)h+='<div class="empty" style="padding:18px 10px">이 날 일정이 없어요.</div>';
+  // 할 일(이번 주)을 일정 안에 통합 — 하루 업무를 한 화면에서
+  const wk=thisMon();
+  const todos=S.events.filter(e=>e.todo&&(e.week||wk)===wk).sort((a,b)=>(a.done?1:0)-(b.done?1:0)||(a.title||'').localeCompare(b.title||''));
+  const undoneCnt=todos.filter(e=>!e.done).length;
+  const addTodoBtn=READONLY?'':'<button data-addtodo="1" style="margin-left:auto;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.35);color:#BAE6FD;border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">+ 할일</button>';
+  h+=grpHead('✅','이번 주 할 일',undoneCnt,addTodoBtn);
+  if(!todos.length)h+='<div class="empty" style="padding:14px 10px;font-size:13px">등록된 할 일이 없어요.</div>';
+  else todos.forEach(e=>h+=todoRow(e));
   return h;
 }
 function evRow(e){
   const strike=e.done?'text-decoration:line-through;opacity:.55':'';
   const chk=e.done?'✅':'⬜';
-  const tcol={'미팅':'#38BDF8','행사':'#A78BFA','발표':'#FBBF24','기타':'#94A3B8'};
+  const tcol={'미팅':'#38BDF8','출장':'#34D399','행사':'#A78BFA','발표':'#FBBF24','기타':'#94A3B8'};
   const tbadge=e.etype?` <span style="font-size:10px;font-weight:700;color:${tcol[e.etype]||'#94A3B8'};background:rgba(148,163,184,.14);padding:1px 6px;border-radius:6px;vertical-align:middle">${e.etype}</span>`:'';
+  const sbadge=e.secret?` <span style="font-size:10px;font-weight:800;color:#FCA5A5;background:rgba(248,113,113,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🔒 대외비</span>`:'';
   const range=(e.end&&e.end!==e.date)?` <span style="font-size:11px;color:#8FD3FF">~${esc(e.end.slice(5))}</span>`:'';
   const det=[e.place?('📍'+e.place):'',e.attendees?('👥'+e.attendees):''].filter(Boolean).join(' · ');
   return `<div class="ev" data-ev="${e.id}" style="cursor:pointer;${e.done?'opacity:.75':''}">`+
     `<span data-done="${e.id}" title="완료 표시" style="flex:none;cursor:pointer;font-size:17px;line-height:1;margin-top:1px">${chk}</span>`+
     `<div class="when" style="width:46px;${strike}">${esc(e.time||'종일')}</div>`+
-    `<div style="flex:1"><b style="${strike}">${esc(e.title)}${tbadge}${range}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}${det?`<span style="color:#9FB6D0">${esc(det)}</span>`:''}</div>`+
+    `<div style="flex:1"><b style="${strike}">${esc(e.title)}${tbadge}${sbadge}${range}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}${det?`<span style="color:#9FB6D0">${esc(det)}</span>`:''}</div>`+
     `<label class="movebtn" title="날짜 변경" style="flex:none;position:relative;overflow:hidden;color:#8FD3FF;cursor:pointer;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:7px;padding:3px 8px;margin-right:7px">📅 이동<input type="date" data-move="${e.id}" value="${e.date||''}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`+
     `<span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:7px;font-size:14px;cursor:pointer">✎</span>`+
     `<span class="del" data-id="${e.id}" title="삭제" style="cursor:pointer">✕</span></div>`}
@@ -707,6 +729,11 @@ function bindCal(){
   w.querySelectorAll('[data-move]').forEach(x=>{x.onclick=ev=>ev.stopPropagation();x.onchange=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.move);if(!e||!x.value)return;e.date=x.value;e.done=false;save();calSel=x.value;renderCal();badges();toast('날짜를 옮겼어요')}});
   w.querySelectorAll('[data-ev]').forEach(x=>x.onclick=ev=>{if(ev.target.closest('.del')||ev.target.closest('[data-edit]')||ev.target.closest('[data-done]')||ev.target.closest('label'))return;editEventForm(x.dataset.ev)});
   const ad=w.querySelector('[data-add]');if(ad)ad.onclick=()=>addEventForm(calSel);
+  // 일정 안에 통합된 '할 일' 조작
+  w.querySelectorAll('[data-tdone]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const e=S.events.find(o=>o.id===x.dataset.tdone);if(e){e.done=!e.done;save();renderCal();if($('#todoList'))renderTodo();badges()}});
+  w.querySelectorAll('[data-tdel]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();S.events=S.events.filter(o=>o.id!==x.dataset.tdel);save();renderCal();if($('#todoList'))renderTodo();badges()});
+  w.querySelectorAll('[data-tedit]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();editTodoForm(x.dataset.tedit)});
+  const at=w.querySelector('[data-addtodo]');if(at)at.onclick=()=>addTodoForm();
 }
 function eventFormFields(p){
   const inp="width:100%;box-sizing:border-box;background:#0B1220;border:1px solid rgba(56,189,248,.25);border-radius:10px;color:#DCEEFF;padding:9px 10px;font:inherit";
@@ -716,10 +743,11 @@ function eventFormFields(p){
   <div class="fld"><label>시간 (선택)</label><input type="time" id="${p}Time"></div>
   <div class="fld"><label>장소 (선택)</label><input id="${p}Place" placeholder="예: 킨텍스 / 본사 회의실"></div>
   <div class="fld"><label>참석자 (선택)</label><input id="${p}Att" placeholder="예: 백석호 이사, A사 김대표"></div>
-  <div class="fld"><label>메모 (선택)</label><textarea id="${p}N" rows="3" style="${inp};resize:vertical"></textarea></div>`;
+  <div class="fld"><label>메모 (선택)</label><textarea id="${p}N" rows="3" style="${inp};resize:vertical"></textarea></div>
+  <label for="${p}Sec" style="display:flex;align-items:center;gap:9px;cursor:pointer;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-top:4px"><input type="checkbox" id="${p}Sec" style="width:18px;height:18px;accent-color:#F87171;flex:none"><span style="font-size:13px;color:#FCA5A5;font-weight:700">🔒 대외비</span><span style="font-size:11px;color:var(--muted)">임직원 공유·조간 메일에서 제외</span></label>`;
 }
-function readEventForm(p){return {title:$('#'+p+'T').value.trim(),date:$('#'+p+'D').value||'',end:$('#'+p+'End').value||'',time:$('#'+p+'Time').value||'',place:$('#'+p+'Place').value.trim(),attendees:$('#'+p+'Att').value.trim(),note:$('#'+p+'N').value.trim(),etype:$('#'+p+'Type').value};}
-function setEventForm(p,e){$('#'+p+'Type').value=e.etype||'미팅';$('#'+p+'T').value=e.title||'';$('#'+p+'D').value=e.date||'';$('#'+p+'End').value=e.end||'';$('#'+p+'Time').value=e.time||'';$('#'+p+'Place').value=e.place||'';$('#'+p+'Att').value=e.attendees||'';$('#'+p+'N').value=e.note||'';}
+function readEventForm(p){return {title:$('#'+p+'T').value.trim(),date:$('#'+p+'D').value||'',end:$('#'+p+'End').value||'',time:$('#'+p+'Time').value||'',place:$('#'+p+'Place').value.trim(),attendees:$('#'+p+'Att').value.trim(),note:$('#'+p+'N').value.trim(),etype:$('#'+p+'Type').value,secret:!!($('#'+p+'Sec')&&$('#'+p+'Sec').checked)};}
+function setEventForm(p,e){$('#'+p+'Type').value=e.etype||'미팅';$('#'+p+'T').value=e.title||'';$('#'+p+'D').value=e.date||'';$('#'+p+'End').value=e.end||'';$('#'+p+'Time').value=e.time||'';$('#'+p+'Place').value=e.place||'';$('#'+p+'Att').value=e.attendees||'';$('#'+p+'N').value=e.note||'';if($('#'+p+'Sec'))$('#'+p+'Sec').checked=!!e.secret;}
 window.editEventForm=(eid)=>{const e=S.events.find(x=>x.id===eid);if(!e)return;
   openAdd(`<h3>일정 수정</h3>${eventFormFields('ex')}
   <button class="btn" onclick="saveEventEdit('${eid}')">저장</button>
@@ -765,23 +793,29 @@ function renderTodo(){
   w.querySelectorAll('[data-tedit]').forEach(x=>x.onclick=()=>editTodoForm(x.dataset.tedit));
 }
 function todoRow(e){const strike=e.done?'text-decoration:line-through;opacity:.55':'';const chk=e.done?'✅':'⬜';
+  const sbadge=e.secret?` <span style="font-size:10px;font-weight:800;color:#FCA5A5;background:rgba(248,113,113,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🔒 대외비</span>`:'';
   return `<div class="ev" style="align-items:center;${e.done?'opacity:.8':''}">`+
     `<span data-tdone="${e.id}" title="완료" style="flex:none;cursor:pointer;font-size:18px;line-height:1">${chk}</span>`+
-    `<div style="flex:1"><b style="${strike}">${esc(e.title)}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
+    `<div style="flex:1"><b style="${strike}">${esc(e.title)}${sbadge}</b>${e.note?`<span style="${strike}">${esc(e.note)}</span>`:''}</div>`+
     `<span data-tedit="${e.id}" title="수정" style="opacity:.55;margin-right:8px;font-size:14px;cursor:pointer">✎</span>`+
     `<span data-tdel="${e.id}" title="삭제" style="color:#456;cursor:pointer">✕</span></div>`}
 window.todoNav=(d)=>{const p=todoWeek.split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+7*d);todoWeek=dstr(dt);renderTodo()};
 window.todoThis=()=>{todoWeek=thisMon();renderTodo()};
-$('#addTodo').onclick=()=>{openAdd(`<h3>할일 추가</h3>
+const secFld=(idv,on)=>`<label for="${idv}" style="display:flex;align-items:center;gap:9px;cursor:pointer;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;margin-top:2px"><input type="checkbox" id="${idv}" ${on?'checked':''} style="width:18px;height:18px;accent-color:#F87171;flex:none"><span style="font-size:13px;color:#FCA5A5;font-weight:700">🔒 대외비</span><span style="font-size:11px;color:var(--muted)">임직원 공유·조간 메일에서 제외</span></label>`;
+function refreshSched(){if(curView==='cal')renderCal();if(curView==='todo')renderTodo();}
+window.addTodoForm=()=>{openAdd(`<h3>할일 추가</h3>
   <div class="fld"><label>할 일</label><input id="atT" placeholder="예: 견적서 검토"></div>
   <div class="fld"><label>메모 (선택)</label><input id="atN"></div>
+  ${secFld('atSec',false)}
   <button class="btn" onclick="saveTodo()">추가</button><button class="btn ghost" onclick="closeAdd()">취소</button>`)};
-window.saveTodo=()=>{const t=$('#atT').value.trim();if(!t){toast('할 일을 입력하세요');return}S.events.push({id:id(),date:'',time:'',title:t,note:$('#atN').value.trim(),todo:true,done:false,week:thisMon(),src:'manual'});save();closeAdd();todoWeek=thisMon();renderTodo();badges()};
+$('#addTodo').onclick=()=>addTodoForm();
+window.saveTodo=()=>{const t=$('#atT').value.trim();if(!t){toast('할 일을 입력하세요');return}S.events.push({id:id(),date:'',time:'',title:t,note:$('#atN').value.trim(),todo:true,done:false,week:thisMon(),secret:!!($('#atSec')&&$('#atSec').checked),src:'manual'});save();closeAdd();todoWeek=thisMon();refreshSched();badges()};
 window.editTodoForm=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;openAdd(`<h3>할일 수정</h3>
   <div class="fld"><label>할 일</label><input id="etT"></div>
   <div class="fld"><label>메모</label><input id="etN"></div>
+  ${secFld('etSec',e.secret)}
   <button class="btn" onclick="saveTodoEdit('${tid}')">저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`);$('#etT').value=e.title||'';$('#etN').value=e.note||''};
-window.saveTodoEdit=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;const t=$('#etT').value.trim();if(!t){toast('할 일을 입력하세요');return}e.title=t;e.note=$('#etN').value.trim();save();closeAdd();renderTodo();badges();toast('수정했어요')};
+window.saveTodoEdit=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;const t=$('#etT').value.trim();if(!t){toast('할 일을 입력하세요');return}e.title=t;e.note=$('#etN').value.trim();e.secret=!!($('#etSec')&&$('#etSec').checked);save();closeAdd();refreshSched();badges();toast('수정했어요')};
 
 /* ---------- 회의록 (2단계: 폴더 목록 → 폴더 히스토리) ---------- */
 $('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;meetFolder=null;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
