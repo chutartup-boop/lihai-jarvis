@@ -92,7 +92,7 @@
   .ev b{font-size:13.5px;font-weight:700;display:block;color:var(--ink)}
   .ev span{font-size:12px;color:var(--muted)}
   .ev .del{margin-left:auto;color:#456;cursor:pointer;font-size:14px}
-  body.readonly .composer,body.readonly .quick,body.readonly .add,body.readonly .del,body.readonly .movebtn,body.readonly #btnBackup,body.readonly .t[data-v="chat"],body.readonly .t[data-v="memo"],body.readonly [data-edit],body.readonly [data-editm],body.readonly [data-done],body.readonly [data-tdone],body.readonly [data-tedit],body.readonly [data-tdel],body.readonly [data-delfolder],body.readonly #addTodo{display:none!important}
+  body.readonly .composer,body.readonly .quick,body.readonly .add,body.readonly .del,body.readonly .movebtn,body.readonly #btnBackup,body.readonly .t[data-v="chat"],body.readonly .t[data-v="memo"],body.readonly .t[data-v="team"],body.readonly [data-edit],body.readonly [data-editm],body.readonly [data-done],body.readonly [data-tdone],body.readonly [data-tedit],body.readonly [data-tdel],body.readonly [data-delfolder],body.readonly #addTodo{display:none!important}
   .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:7px;display:inline-block}
   .chip.b{background:rgba(56,189,248,.14);color:#7DD3FC}
   .li{font-size:13px;color:#C6D6EC;padding:3px 0 3px 14px;position:relative}
@@ -177,7 +177,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v21</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v22</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -188,6 +188,7 @@
     <div class="t on" data-v="chat"><span class="ic">💬</span>대화</div>
     <div class="t" data-v="cal"><span class="ic">📅</span>일정<span class="badge" id="bCal" style="display:none"></span></div>
     <div class="t" data-v="todo"><span class="ic">✅</span>할일<span class="badge" id="bTodo" style="display:none"></span></div>
+    <div class="t" data-v="team"><span class="ic">👥</span>팀일지<span class="badge" id="bTeam" style="display:none"></span></div>
     <div class="t" data-v="meet"><span class="ic">🗂</span>회의록<span class="badge" id="bMeet" style="display:none"></span></div>
     <div class="t" data-v="memo"><span class="ic">📝</span>메모<span class="badge" id="bMemo" style="display:none"></span></div>
   </div>
@@ -215,6 +216,11 @@
   <section class="view" id="v-todo"><div class="vwrap">
     <div class="vhead"><h2>✅ 할일</h2><button class="add" id="addTodo">+ 할일 추가</button></div>
     <div id="todoList"></div>
+  </div></section>
+
+  <section class="view" id="v-team"><div class="vwrap">
+    <div class="vhead"><h2>👥 팀 업무일지</h2><button class="add" id="teamReload">↻ 새로고침</button></div>
+    <div id="teamList"></div>
   </div></section>
 
   <section class="view" id="v-meet"><div class="vwrap">
@@ -321,6 +327,9 @@ const SB_URL='https://whhmymjijieuqiqvjszh.supabase.co';
 const SB_KEY='sb_publishable_ekN8wEjTor413zTwy0YHVw_8e6eNUea';
 const sb=window.supabase.createClient(SB_URL,SB_KEY);
 const OWNER_EMAIL='himd9388@naver.com'; // 대표님 계정(쓰기 가능). 이 외 계정은 읽기 전용.
+// 팀 업무일지 연동 (team-brief Edge Function). 함수 슬러그가 다르면 TEAM_FN만 바꾸세요.
+const TEAM_FN=SB_URL+'/functions/v1/team-brief';
+const TEAM_TOKEN='lihai-team-60ba72e94e941646eec783f8';
 let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=null,pollTimer=null,curView='chat',sending=false,READONLY=false;
 function myEmail(){return (USER&&USER.email||'').toLowerCase();}
 
@@ -418,7 +427,7 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='todo'){todoWeek=thisMon();renderTodo();}if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='todo'){todoWeek=thisMon();renderTodo();}if(v==='team')renderTeam();if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
@@ -816,6 +825,67 @@ window.editTodoForm=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;op
   ${secFld('etSec',e.secret)}
   <button class="btn" onclick="saveTodoEdit('${tid}')">저장</button><button class="btn ghost" onclick="closeAdd()">취소</button>`);$('#etT').value=e.title||'';$('#etN').value=e.note||''};
 window.saveTodoEdit=(tid)=>{const e=S.events.find(x=>x.id===tid);if(!e)return;const t=$('#etT').value.trim();if(!t){toast('할 일을 입력하세요');return}e.title=t;e.note=$('#etN').value.trim();e.secret=!!($('#etSec')&&$('#etSec').checked);save();closeAdd();refreshSched();badges();toast('수정했어요')};
+
+/* ---------- 팀 업무일지 (직원 시스템 daily_logs를 team-brief 함수로 땡겨옴) ---------- */
+let teamDate=null,teamBusy=false;
+const WSTAT={office:'🏢 사무실',home:'🏠 재택',field:'🚗 외근',trip:'✈️ 출장'};
+function teamNavBtn(lbl,fn){return `<button onclick="${fn}" style="flex:none;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.35);color:#BAE6FD;border-radius:9px;padding:6px 13px;font-size:15px;font-weight:800;cursor:pointer">${lbl}</button>`;}
+async function renderTeam(force){
+  const w=$('#teamList');if(!w)return;if(READONLY){w.innerHTML='';return;}
+  if(!teamDate)teamDate=today();
+  if(teamBusy&&!force)return;teamBusy=true;
+  const de=parseD(teamDate);
+  const head=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 2px 14px">
+    ${teamNavBtn('‹','teamNav(-1)')}
+    <div style="text-align:center"><div style="font-weight:800;color:#E5F2FF;font-size:15px">${de.getMonth()+1}월 ${de.getDate()}일 (${WD[de.getDay()]})${teamDate===today()?' · 오늘':''}</div><div id="teamSub" style="font-size:11px;color:var(--muted)">불러오는 중…</div></div>
+    ${teamNavBtn('›','teamNav(1)')}</div>
+    <div style="text-align:center;margin-bottom:12px">${teamDate===today()?'':'<button onclick="teamToday()" style="background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.4);color:#BAE6FD;border-radius:9px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">오늘로</button>'}</div>`;
+  w.innerHTML=head+'<div class="empty" style="padding:26px 10px">📡 직원 업무일지를 불러오는 중…</div>';
+  let j=null,err=null;
+  try{
+    const r=await fetch(TEAM_FN+'?key='+encodeURIComponent(TEAM_TOKEN)+'&date='+teamDate,{headers:{apikey:SB_KEY}});
+    j=await r.json();if(!r.ok||!j.ok)err=(j&&j.error)||('HTTP '+r.status);
+  }catch(e){err=String(e)}
+  teamBusy=false;
+  if(err){
+    w.innerHTML=head+`<div class="empty" style="padding:22px 12px;line-height:1.7">직원 업무일지를 아직 불러올 수 없어요.<br><span style="color:var(--muted);font-size:12px">team-brief 함수 배포·토큰 설정이 끝나면 여기에 표시돼요.<br>(${esc(err)})</span></div>`;
+    bindTeam();return;
+  }
+  const logs=j.logs||[],ns=j.notSubmitted||[];
+  const sub=$('#teamSub');if(sub)sub.textContent='제출 '+logs.length+' · 미제출 '+ns.length+' / 총 '+((j.counts&&j.counts.employees)||(logs.length+ns.length));
+  let h=head;
+  if(!logs.length&&!ns.length){h+=empty('👥','이 날 등록된 직원 일지가 없어요.');w.innerHTML=h;bindTeam();return;}
+  // 부서별 그룹
+  const depts=[];logs.forEach(p=>{if(!depts.includes(p.dept))depts.push(p.dept);});
+  depts.forEach(d=>{
+    h+=`<div style="margin:16px 2px 7px;font-size:12px;font-weight:800;color:#8FD3FF">🏢 ${esc(d||'기타')}</div>`;
+    logs.filter(p=>p.dept===d).forEach(p=>h+=teamCard(p));
+  });
+  if(ns.length){
+    h+=`<div class="card" style="margin-top:16px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25)">
+      <div style="color:#FCA5A5;font-weight:800;font-size:13px">🔴 미제출 ${ns.length}명</div>
+      <div style="color:#9FB6D0;font-size:12.5px;margin-top:5px">${ns.map(n=>esc(n.name)+(n.dept?'('+esc(n.dept)+')':'')).join(', ')}</div></div>`;
+  }else if(logs.length){
+    h+=`<div style="text-align:center;color:#34D399;font-size:13px;margin-top:14px">✅ 전원 제출 완료</div>`;
+  }
+  w.innerHTML=h;bindTeam();
+}
+function teamCard(p){
+  const scol=s=>s==='완료'?'#34D399':(s==='지연'||s==='보류')?'#FCA5A5':'#FBBF24';
+  const tasks=(p.today_tasks||[]).map(t=>`<div style="font-size:13px;margin:3px 0;color:#DCEEFF">${t.project?('<b style="color:#8FD3FF">'+esc(t.project)+'</b> · '):''}${esc(t.task||'')}${t.status?` <span style="font-size:10px;color:${scol(t.status)}">[${esc(t.status)}]</span>`:''}</div>`).join('')||'<div style="font-size:12px;color:#7C93AD;margin-top:2px">오늘 업무 기재 없음</div>';
+  const det=p.work_status_detail;
+  const wlabel=p.work_status?(WSTAT[p.work_status]||esc(p.work_status)):'';
+  const wline=wlabel?`<span style="font-size:11.5px;color:#38BDF8;font-weight:700">${wlabel}</span>${det&&det.where?` <span style="color:#9FB6D0;font-size:11px">· ${esc(det.where)}${det.when?'('+esc(det.when)+')':''}</span>`:''}`:'';
+  const meet=(p.meetings||[]).length?`<div style="font-size:11.5px;color:#9FB6D0;margin-top:5px">🗣 ${p.meetings.map(m=>esc(m.topic||'')+(m.where?'('+esc(m.where)+')':'')).join(' · ')}</div>`:'';
+  const fly=(p.flight_plan||[]).length?`<div style="font-size:11.5px;color:#9FB6D0;margin-top:2px">🛩 ${p.flight_plan.map(f=>esc(f.purpose||'')+(f.place?'@'+esc(f.place):'')).join(' · ')}</div>`:'';
+  const help=p.help_needed?`<div style="font-size:11.5px;color:#FCA5A5;margin-top:5px">⚠️ ${esc(p.help_needed).replace(/\n/g,', ')}</div>`:'';
+  return `<div class="card" style="margin-bottom:9px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:14px;color:#EAF4FF">${esc(p.name)}</b><span style="font-size:11px;color:#7C93AD">${esc(p.title||'')}</span>${wline}</div>
+    <div style="margin-top:6px">${tasks}</div>${meet}${fly}${help}</div>`;
+}
+window.teamNav=(d)=>{const p=teamDate.split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+d);teamDate=dstr(dt);renderTeam(true)};
+window.teamToday=()=>{teamDate=today();renderTeam(true)};
+function bindTeam(){const b=$('#teamReload');if(b)b.onclick=()=>renderTeam(true);}
 
 /* ---------- 회의록 (2단계: 폴더 목록 → 폴더 히스토리) ---------- */
 $('#meetCat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;meetCat=b.dataset.c;meetFolder=null;document.querySelectorAll('#meetCat button').forEach(x=>x.classList.toggle('on',x===b));renderMeet()});
