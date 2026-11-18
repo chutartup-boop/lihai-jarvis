@@ -177,7 +177,7 @@
 <div id="app">
   <div class="top">
     <div class="logo">J</div>
-    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v23</span></h1>
+    <h1>J.A.R.V.I.S<span>리하이 · 추혜성 대표 · POWERED BY CLAUDE · v24</span></h1>
     <div class="sp">
       <button class="ic-btn" id="btnBackup" title="백업">💾</button>
       <button class="ic-btn" id="btnSettings" title="설정">⚙️</button>
@@ -330,6 +330,21 @@ const OWNER_EMAIL='himd9388@naver.com'; // 대표님 계정(쓰기 가능). 이 
 // 팀 업무일지 연동 (team-brief Edge Function). 함수 슬러그가 다르면 TEAM_FN만 바꾸세요.
 const TEAM_FN=SB_URL+'/functions/v1/team-brief';
 const TEAM_TOKEN='lihai-team-60ba72e94e941646eec783f8';
+// 구글 캘린더 연동 (gcal Edge Function)
+const GCAL_FN=SB_URL+'/functions/v1/gcal';
+let GCAL=[],gcalLoaded=false,gcalBusy=false;
+function gOn(g,ds){return g&&g.date&&g.date<=ds&&(g.end||g.date)>=ds;}
+function cntOn(ds){return S.events.filter(e=>evOn(e,ds)).length+GCAL.filter(g=>gOn(g,ds)).length;}
+async function loadGcal(force){
+  if(gcalBusy)return;if(gcalLoaded&&!force)return;gcalBusy=true;
+  try{
+    const r=await fetch(GCAL_FN+'?key='+encodeURIComponent(TEAM_TOKEN),{headers:{apikey:SB_KEY}});
+    const j=await r.json();
+    if(j&&j.ok&&Array.isArray(j.events)){GCAL=j.events;gcalLoaded=true;}
+  }catch(e){console.warn('gcal',e)}
+  gcalBusy=false;
+  if(curView==='cal')renderCal();
+}
 let USER=null,cloudReady=false,saveTimer=null,pendingSave=false,lastServerTs=null,pollTimer=null,curView='chat',sending=false,READONLY=false;
 function myEmail(){return (USER&&USER.email||'').toLowerCase();}
 
@@ -427,7 +442,7 @@ $('#tabs').addEventListener('click',e=>{const t=e.target.closest('.t');if(!t)ret
   document.querySelectorAll('.tabs .t').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   $('#v-'+t.dataset.v).classList.add('on');
-  const v=t.dataset.v;curView=v;if(v==='cal')renderCal();if(v==='todo'){todoWeek=thisMon();renderTodo();}if(v==='team')renderTeam();if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
+  const v=t.dataset.v;curView=v;if(v==='cal'){renderCal();loadGcal(true);}if(v==='todo'){todoWeek=thisMon();renderTodo();}if(v==='team')renderTeam();if(v==='meet'){meetFolder=null;renderMeet();}if(v==='memo')renderMemo();
 });
 function badges(){
   const set=(el,n)=>{const b=$(el);if(n){b.style.display='inline-block';b.textContent=n}else b.style.display='none'};
@@ -670,7 +685,7 @@ function ensureMeetingForEvent(e){
 function weekStrip(){
   const sel=parseD(calSel);const ws=new Date(sel);ws.setDate(sel.getDate()-sel.getDay());
   let h=`<div class="calnav"><button data-nav="pw">‹</button><div class="caltitle">${ws.getFullYear()}년 ${ws.getMonth()+1}월</div><button data-nav="tw">오늘</button><button data-nav="nw">›</button></div><div class="week">`;
-  for(let i=0;i<7;i++){const d=new Date(ws);d.setDate(ws.getDate()+i);const ds=dstr(d);const cnt=S.events.filter(e=>evOn(e,ds)).length;
+  for(let i=0;i<7;i++){const d=new Date(ws);d.setDate(ws.getDate()+i);const ds=dstr(d);const cnt=cntOn(ds);
     let c='d';if(ds===calSel)c+=' sel';if(ds===today())c+=' today';if(i===0)c+=' sun';if(i===6)c+=' sat';
     h+=`<div class="${c}" data-d="${ds}"><span class="wd">${WD[i]}</span><span class="dn">${d.getDate()}</span>${cnt?'<span class="dot"></span>':''}</div>`}
   return h+'</div>';
@@ -679,7 +694,7 @@ function monthGrid(){
   const a=parseD(calSel);const y=a.getFullYear(),m=a.getMonth();const first=new Date(y,m,1);const gs=new Date(first);gs.setDate(1-first.getDay());
   let h=`<div class="calnav"><button data-nav="pm">‹</button><div class="caltitle">${y}년 ${m+1}월</div><button data-nav="tm">오늘</button><button data-nav="nm">›</button></div><div class="mgrid">`;
   h+=WD.map((d,i)=>`<div class="mh${i===0?' sun':''}${i===6?' sat':''}">${d}</div>`).join('');
-  for(let i=0;i<42;i++){const d=new Date(gs);d.setDate(gs.getDate()+i);const ds=dstr(d);const cnt=S.events.filter(e=>evOn(e,ds)).length;
+  for(let i=0;i<42;i++){const d=new Date(gs);d.setDate(gs.getDate()+i);const ds=dstr(d);const cnt=cntOn(ds);
     let c='mc';if(d.getMonth()!==m)c+=' dim';if(ds===today())c+=' today';if(ds===calSel)c+=' sel';
     h+=`<div class="${c}" data-d="${ds}">${d.getDate()}${cnt?`<span class="mdot"></span><span class="cnt">${cnt}건</span>`:''}</div>`}
   return h+'</div>';
@@ -700,6 +715,9 @@ function dayPanel(){
   ];
   let shown=0;
   groups.forEach(g=>{const list=evs.filter(g.pick);if(!list.length)return;shown+=list.length;h+=grpHead(g.icon,g.label,list.length);list.forEach(e=>h+=evRow(e));});
+  // 구글 캘린더 일정(읽기전용)
+  const gevs=GCAL.filter(g=>gOn(g,calSel)).sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+  if(gevs.length){shown+=gevs.length;h+=grpHead('🗓️','구글 캘린더',gevs.length);gevs.forEach(g=>h+=gcalRow(g));}
   if(!shown)h+='<div class="empty" style="padding:18px 10px">이 날 일정이 없어요.</div>';
   // 할 일(이번 주)을 일정 안에 통합 — 하루 업무를 한 화면에서
   const wk=thisMon();
@@ -726,6 +744,14 @@ function evRow(e){
     `<label class="movebtn" title="날짜 변경" style="flex:none;position:relative;overflow:hidden;color:#8FD3FF;cursor:pointer;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);border-radius:7px;padding:3px 8px;margin-right:7px">📅 이동<input type="date" data-move="${e.id}" value="${e.date||''}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>`+
     `<span data-edit="${e.id}" title="수정" style="opacity:.55;margin-right:7px;font-size:14px;cursor:pointer">✎</span>`+
     `<span class="del" data-id="${e.id}" title="삭제" style="cursor:pointer">✕</span></div>`}
+function gcalRow(g){
+  const range=(g.end&&g.end!==g.date)?` <span style="font-size:11px;color:#8FD3FF">~${esc(g.end.slice(5))}</span>`:'';
+  const place=g.place?` <span style="color:#9FB6D0">📍${esc(g.place)}</span>`:'';
+  return `<div class="ev" style="align-items:center">`+
+    `<span title="구글 캘린더" style="flex:none;font-size:13px;line-height:1;background:rgba(66,133,244,.2);color:#8AB4F8;font-weight:800;border-radius:5px;padding:2px 5px;margin-top:1px">G</span>`+
+    `<div class="when" style="width:46px">${esc(g.time||'종일')}</div>`+
+    `<div style="flex:1"><b>${esc(g.title)}${range}</b>${place}</div></div>`;
+}
 function nextDay(d){const p=(d||today()).split('-').map(Number);const dt=new Date(p[0],p[1]-1,p[2]);dt.setDate(dt.getDate()+1);return dstr(dt);}
 function bindCal(){
   const w=$('#calList');
@@ -1127,6 +1153,7 @@ async function afterLogin(){
   if(READONLY){renderCal();}
   else{renderQuick();if(!S.settings.key)setTimeout(openSettings,500);}
   startSync();
+  loadGcal(); // 구글 캘린더 일정 불러오기(오너·임원 공용)
 }
 $('#loginBtn').onclick=async()=>{
   const email=$('#loginEmail').value.trim(),password=$('#loginPw').value;
